@@ -1,114 +1,109 @@
-# autoresearch
+# Autoresearch Program: Transformer Paper Reimplementation
 
-This is an experiment to have the LLM do its own research.
+You are running on `lambda-quad`, a Linux workstation with NVIDIA GPUs. Your job is to use the
+Karpathy autoresearch loop to reimplement and study the core ideas from "Attention Is All You Need"
+inside this repo's compact single-file language-model training setup.
+
+## Research Goal
+
+Get a working, measurable Transformer-paper-inspired model in `train.py`, then improve validation
+bits per byte (`val_bpb`) under the fixed five-minute training budget.
+
+The original 2017 paper is an encoder-decoder sequence transduction model. This repo is a causal
+language model, so do not force a full translation system into it. Instead, make the causal model
+faithfully expose and test the paper's architectural ideas where they make sense:
+
+- scaled dot-product multi-head attention
+- learned token embeddings plus an explicit positional signal
+- residual streams around attention and feed-forward sublayers
+- layer normalization around sublayers
+- position-wise feed-forward networks
+- dropout or regularization only if it helps the five-minute metric
+- clear, simple hyperparameters that make the implementation easy to inspect
+
+The first useful milestone is not novelty. It is a clean, reviewable baseline that looks like the
+paper's Transformer adapted to next-token prediction and trains successfully on the local GPU.
+
+## Files
+
+Read the repo before editing:
+
+- `README.md` for the autoresearch rules.
+- `prepare.py` for constants, data loading, tokenizer, and evaluation. Do not modify it.
+- `train.py` for the editable model, optimizer, and training loop.
+
+Only edit `train.py` unless you are fixing local logging around the experiment. Do not edit
+`prepare.py` or the evaluation function.
 
 ## Setup
 
-To set up a new experiment, work with the user to:
+Use `uv` from the user install:
 
-1. **Agree on a run tag**: propose a tag based on today's date (e.g. `mar5`). The branch `autoresearch/<tag>` must not already exist — this is a fresh run.
-2. **Create the branch**: `git checkout -b autoresearch/<tag>` from current master.
-3. **Read the in-scope files**: The repo is small. Read these files for full context:
-   - `README.md` — repository context.
-   - `prepare.py` — fixed constants, data prep, tokenizer, dataloader, evaluation. Do not modify.
-   - `train.py` — the file you modify. Model architecture, optimizer, training loop.
-4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains data shards and a tokenizer. If not, tell the human to run `uv run prepare.py`.
-5. **Initialize results.tsv**: Create `results.tsv` with just the header row. The baseline will be recorded after the first run.
-6. **Confirm and go**: Confirm setup looks good.
-
-Once you get confirmation, kick off the experimentation.
-
-## Experimentation
-
-Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run train.py`.
-
-**What you CAN do:**
-- Modify `train.py` — this is the only file you edit. Everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size, etc.
-
-**What you CANNOT do:**
-- Modify `prepare.py`. It is read-only. It contains the fixed evaluation, data loading, tokenizer, and training constants (time budget, sequence length, etc).
-- Install new packages or add dependencies. You can only use what's already in `pyproject.toml`.
-- Modify the evaluation harness. The `evaluate_bpb` function in `prepare.py` is the ground truth metric.
-
-**The goal is simple: get the lowest val_bpb.** Since the time budget is fixed, you don't need to worry about training time — it's always 5 minutes. Everything is fair game: change the architecture, the optimizer, the hyperparameters, the batch size, the model size. The only constraint is that the code runs without crashing and finishes within the time budget.
-
-**VRAM** is a soft constraint. Some increase is acceptable for meaningful val_bpb gains, but it should not blow up dramatically.
-
-**Simplicity criterion**: All else being equal, simpler is better. A small improvement that adds ugly complexity is not worth it. Conversely, removing something and getting equal or better results is a great outcome — that's a simplification win. When evaluating whether to keep a change, weigh the complexity cost against the improvement magnitude. A 0.001 val_bpb improvement that adds 20 lines of hacky code? Probably not worth it. A 0.001 val_bpb improvement from deleting code? Definitely keep. An improvement of ~0 but much simpler code? Keep.
-
-**The first run**: Your very first run should always be to establish the baseline, so you will run the training script as is.
-
-## Output format
-
-Once the script finishes it prints a summary like this:
-
-```
----
-val_bpb:          0.997900
-training_seconds: 300.1
-total_seconds:    325.9
-peak_vram_mb:     45060.2
-mfu_percent:      39.80
-total_tokens_M:   499.6
-num_steps:        953
-num_params_M:     50.3
-depth:            8
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+cd /home/mark/autoresearch-transformer-paper
+uv sync
+uv run prepare.py
 ```
 
-Note that the script is configured to always stop after 5 minutes, so depending on the computing platform of this computer the numbers might look different. You can extract the key metric from the log file:
+If full preparation is already complete, do not redo unnecessary work. The data/tokenizer cache is
+under `~/.cache/autoresearch/`.
 
-```
-grep "^val_bpb:" run.log
-```
+Initialize `results.tsv` if it does not exist:
 
-## Logging results
-
-When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated — commas break in descriptions).
-
-The TSV has a header row and 5 columns:
-
-```
+```text
 commit	val_bpb	memory_gb	status	description
 ```
 
-1. git commit hash (short, 7 chars)
-2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
-3. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
-4. status: `keep`, `discard`, or `crash`
-5. short text description of what this experiment tried
+## Telemetry
 
-Example:
+`train.py` emits local JSON telemetry into `metrics/`:
 
+- `metrics/<run_id>.jsonl`
+- `metrics/latest.json`
+
+If the environment contains `DASHBOARD_INGEST_URL`, it also POSTs progress events to the dashboard.
+Do not print secrets or tokens. If the dashboard endpoint fails, keep training; local metrics are the
+source of truth.
+
+Suggested run environment:
+
+```bash
+export AUTORESEARCH_RUN_ID="transformer-paper-$(date +%Y%m%d-%H%M%S)"
+uv run train.py > "run-$AUTORESEARCH_RUN_ID.log" 2>&1
 ```
-commit	val_bpb	memory_gb	status	description
-a1b2c3d	0.997900	44.0	keep	baseline
-b2c3d4e	0.993200	44.2	keep	increase LR to 0.04
-c3d4e5f	1.005000	44.0	discard	switch to GeLU activation
-d4e5f6g	0.000000	0.0	crash	double model width (OOM)
-```
 
-## The experiment loop
+## Experiment Loop
 
-The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autoresearch/mar5-gpu0`).
+1. Check git state and current commit.
+2. Establish a baseline if none exists: run current `train.py` unchanged and log the result.
+3. Make one coherent Transformer-paper-inspired change in `train.py`.
+4. Commit the change.
+5. Run `uv run train.py > run.log 2>&1`.
+6. Extract the final summary with `grep "^val_bpb:\\|^peak_vram_mb:\\|^num_steps:" run.log`.
+7. Append one row to `results.tsv`.
+8. Keep the commit if `val_bpb` improves. If it is worse or crashes, reset back to the previous good commit.
 
-LOOP FOREVER:
+Status values:
 
-1. Look at the git state: the current branch/commit we're on
-2. Tune `train.py` with an experimental idea by directly hacking the code.
-3. git commit
-4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
-5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
-6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
-7. Record the results in the tsv (NOTE: do not commit the results.tsv file, leave it untracked by git)
-8. If val_bpb improved (lower), you "advance" the branch, keeping the git commit
-9. If val_bpb is equal or worse, you git reset back to where you started
+- `keep`: improvement or valuable baseline
+- `discard`: valid run but worse metric
+- `crash`: failed run or timeout
 
-The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).
+Each experiment should finish in roughly five minutes plus startup/evaluation. If a run exceeds ten
+minutes, kill it, log it as a crash, and move on.
 
-**Timeout**: Each experiment should take ~5 minutes total (+ a few seconds for startup and eval overhead). If a run exceeds 10 minutes, kill it and treat it as a failure (discard and revert).
+## First Research Directions
 
-**Crashes**: If a run crashes (OOM, or a bug, or etc.), use your judgment: If it's something dumb and easy to fix (e.g. a typo, a missing import), fix it and re-run. If the idea itself is fundamentally broken, just skip it, log "crash" as the status in the tsv, and move on.
+Start simple and paper-faithful:
 
-**NEVER STOP**: Once the experiment loop has begun (after the initial setup), do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until you are manually stopped. You are autonomous. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes. The loop runs until the human interrupts you, period.
+- Compare the existing RoPE/RMSNorm/ResFormer-ish setup against a cleaner sinusoidal or learned
+  positional embedding plus LayerNorm-style block.
+- Try a straightforward attention + FFN block before adding optimizations back.
+- Preserve efficient flash attention if it keeps the paper-like attention semantics and avoids slow
+  runs on RTX 3090.
+- Keep parameter count and VRAM visible. The metric matters, but the implementation should remain
+  understandable.
 
-As an example use case, a user might leave you running while they sleep. If each experiment takes you ~5 minutes then you can run approx 12/hour, for a total of about 100 over the duration of the average human sleep. The user then wakes up to experimental results, all completed by you while they slept!
+Never dump secrets or inspect private credential files. Continue autonomously once the first run is
+started.

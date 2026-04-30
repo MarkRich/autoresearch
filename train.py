@@ -9,9 +9,14 @@ os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
 import gc
+import json
 import math
+import socket
+import threading
 import time
+import urllib.request
 from dataclasses import dataclass, asdict
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -24,6 +29,49 @@ repo = "varunneal/flash-attention-3" if cap == (9, 0) else "kernels-community/fl
 fa3 = get_kernel(repo).flash_attn_interface
 
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
+
+# ---------------------------------------------------------------------------
+# Lightweight run telemetry
+# ---------------------------------------------------------------------------
+
+RUN_ID = os.environ.get("AUTORESEARCH_RUN_ID") or time.strftime("transformer-paper-%Y%m%d-%H%M%S")
+METRICS_DIR = Path(os.environ.get("AUTORESEARCH_METRICS_DIR", "metrics"))
+DASHBOARD_INGEST_URL = os.environ.get("DASHBOARD_INGEST_URL", "")
+DASHBOARD_INGEST_TOKEN = os.environ.get("DASHBOARD_INGEST_TOKEN", "")
+HOSTNAME = socket.gethostname()
+
+
+def _post_event(event):
+    if not DASHBOARD_INGEST_URL:
+        return
+    body = json.dumps(event).encode("utf-8")
+    headers = {"content-type": "application/json"}
+    if DASHBOARD_INGEST_TOKEN:
+        headers["authorization"] = f"Bearer {DASHBOARD_INGEST_TOKEN}"
+    request = urllib.request.Request(DASHBOARD_INGEST_URL, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=2) as response:
+            response.read()
+    except Exception as exc:
+        print(f"\ntelemetry_post_failed: {type(exc).__name__}: {exc}", flush=True)
+
+
+def emit_event(kind, **payload):
+    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+    event = {
+        "kind": kind,
+        "run_id": RUN_ID,
+        "host": HOSTNAME,
+        "time": time.time(),
+        **payload,
+    }
+    with (METRICS_DIR / f"{RUN_ID}.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(event, sort_keys=True) + "\n")
+    latest_tmp = METRICS_DIR / "latest.json.tmp"
+    latest_tmp.write_text(json.dumps(event, indent=2, sort_keys=True), encoding="utf-8")
+    latest_tmp.replace(METRICS_DIR / "latest.json")
+    if DASHBOARD_INGEST_URL:
+        threading.Thread(target=_post_event, args=(event,), daemon=True).start()
 
 # ---------------------------------------------------------------------------
 # GPT Model
@@ -478,6 +526,16 @@ def build_model_config(depth):
 
 config = build_model_config(DEPTH)
 print(f"Model config: {asdict(config)}")
+emit_event(
+    "start",
+    model_family="transformer-paper",
+    goal="Reimplement and study the core Attention Is All You Need Transformer ideas inside autoresearch.",
+    config=asdict(config),
+    time_budget_seconds=TIME_BUDGET,
+    max_seq_len=MAX_SEQ_LEN,
+    total_batch_size=TOTAL_BATCH_SIZE,
+    device_batch_size=DEVICE_BATCH_SIZE,
+)
 
 with torch.device("meta"):
     model = GPT(config)
@@ -539,6 +597,7 @@ t_start_training = time.time()
 smooth_train_loss = 0
 total_training_time = 0
 step = 0
+last_emit_time = 0.0
 
 while True:
     torch.cuda.synchronize()
@@ -589,6 +648,23 @@ while True:
 
     print(f"\rstep {step:05d} ({pct_done:.1f}%) | loss: {debiased_smooth_loss:.6f} | lrm: {lrm:.2f} | dt: {dt*1000:.0f}ms | tok/sec: {tok_per_sec:,} | mfu: {mfu:.1f}% | epoch: {epoch} | remaining: {remaining:.0f}s    ", end="", flush=True)
 
+    now = time.time()
+    if step == 0 or now - last_emit_time >= 15 or remaining <= 0:
+        emit_event(
+            "step",
+            step=step,
+            progress=pct_done,
+            train_loss=debiased_smooth_loss,
+            lr_multiplier=lrm,
+            step_seconds=dt,
+            tokens_per_second=tok_per_sec,
+            mfu_percent=mfu,
+            epoch=epoch,
+            remaining_seconds=remaining,
+            total_training_seconds=total_training_time,
+        )
+        last_emit_time = now
+
     # GC management (Python's GC causes ~500ms stalls)
     if step == 0:
         gc.collect()
@@ -628,3 +704,16 @@ print(f"total_tokens_M:   {total_tokens / 1e6:.1f}")
 print(f"num_steps:        {step}")
 print(f"num_params_M:     {num_params / 1e6:.1f}")
 print(f"depth:            {DEPTH}")
+emit_event(
+    "final",
+    val_bpb=val_bpb,
+    training_seconds=total_training_time,
+    total_seconds=t_end - t_start,
+    startup_seconds=startup_time,
+    peak_vram_mb=peak_vram_mb,
+    mfu_percent=steady_state_mfu,
+    total_tokens_m=total_tokens / 1e6,
+    num_steps=step,
+    num_params_m=num_params / 1e6,
+    depth=DEPTH,
+)
