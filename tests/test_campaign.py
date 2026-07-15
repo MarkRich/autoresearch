@@ -17,6 +17,7 @@ SPEC.loader.exec_module(campaign)
 class CampaignTests(unittest.TestCase):
     def test_default_campaign_is_three_hours_of_paired_30_minute_runs(self):
         self.assertEqual(campaign.DEFAULT_BUDGET_SECONDS, 1800)
+        self.assertEqual(campaign.DEFAULT_MAX_GPU_TEMP_C, 88)
         self.assertEqual(len(campaign.PLAN), 6)
         self.assertEqual(campaign.SEEDS, (101, 202))
         labels = [label for label, _ in campaign.PLAN]
@@ -46,6 +47,11 @@ class CampaignTests(unittest.TestCase):
             )
             values = campaign.load_dashboard_env(path)
             self.assertEqual(set(values), {"DASHBOARD_INGEST_URL", "DASHBOARD_INGEST_TOKEN"})
+
+    def test_temperature_parser_rejects_implausible_values(self):
+        self.assertEqual(campaign.parse_gpu_temperature("84\n"), 84)
+        with self.assertRaises(ValueError):
+            campaign.parse_gpu_temperature("150\n")
 
 
 if __name__ == "__main__":
