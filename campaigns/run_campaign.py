@@ -22,6 +22,7 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_BUDGET_SECONDS = 1800
+DEFAULT_MAX_GPU_TEMP_C = 88
 SEEDS = (101, 202)
 
 BASE_ENV = {
@@ -102,6 +103,28 @@ def read_final(metric_path: Path) -> dict[str, Any] | None:
         if event.get("kind") == "final":
             final = event
     return final
+
+
+def parse_gpu_temperature(output: str) -> int:
+    value = int(float(output.strip().splitlines()[0]))
+    if not 0 <= value <= 120:
+        raise ValueError(f"implausible GPU temperature: {value}")
+    return value
+
+
+def read_gpu_temperature(gpu: int) -> int | None:
+    try:
+        output = subprocess.check_output(
+            [
+                "nvidia-smi", f"--id={gpu}",
+                "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits",
+            ],
+            text=True,
+            timeout=10,
+        )
+        return parse_gpu_temperature(output)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
 
 
 def post_event(event: dict[str, Any], dashboard: dict[str, str]) -> None:
@@ -216,6 +239,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--campaign-id", default=f"codex-30m-{utc_stamp().lower()}")
     parser.add_argument("--python", default="/home/mark/autoresearch-transformer-paper/.venv/bin/python")
     parser.add_argument("--dashboard-env", type=Path, default=Path.home() / ".config/autoresearch-dashboard.env")
+    parser.add_argument("--max-gpu-temp-c", type=int, default=DEFAULT_MAX_GPU_TEMP_C)
     return parser.parse_args()
 
 
@@ -223,6 +247,8 @@ def main() -> int:
     args = parse_args()
     if args.budget_seconds < 30:
         raise SystemExit("budget must be at least 30 seconds")
+    if not 70 <= args.max_gpu_temp_c <= 95:
+        raise SystemExit("max GPU temperature must be between 70C and 95C")
     round_plan = PLAN[: max(1, min(args.rounds, len(PLAN)))]
     campaign_root = REPO / "campaign-results" / args.campaign_id
     state_path = campaign_root / "state.json"
@@ -234,6 +260,7 @@ def main() -> int:
         "budget_seconds": args.budget_seconds, "rounds_total": len(round_plan),
         "code_sha": code_sha, "started_at": time.time(),
         "estimated_end_at": end_estimate, "runs": [],
+        "max_gpu_temp_c": args.max_gpu_temp_c,
     }
     write_state(state_path, state)
     post_event(control_event(
@@ -264,6 +291,29 @@ def main() -> int:
             while not stopping and any(child.process.poll() is None for child in active):
                 if time.time() > hard_deadline:
                     print(f"round {round_number} exceeded hard deadline; terminating", flush=True)
+                    terminate_children(active)
+                    break
+                temperatures = {
+                    str(child.gpu): read_gpu_temperature(child.gpu) for child in active
+                }
+                state["gpu_temperatures_c"] = temperatures
+                too_hot = {
+                    gpu: temp for gpu, temp in temperatures.items()
+                    if temp is not None and temp >= args.max_gpu_temp_c
+                }
+                if too_hot:
+                    state["stop_reason"] = "thermal_limit"
+                    state["thermal_limit_readings_c"] = too_hot
+                    print(
+                        f"thermal limit reached ({too_hot}); stopping campaign safely",
+                        flush=True,
+                    )
+                    post_event(control_event(
+                        args.campaign_id, "thermal_stop",
+                        temperatures_c=temperatures,
+                        max_gpu_temp_c=args.max_gpu_temp_c,
+                    ), dashboard)
+                    stopping = True
                     terminate_children(active)
                     break
                 state["active_round"] = round_number
