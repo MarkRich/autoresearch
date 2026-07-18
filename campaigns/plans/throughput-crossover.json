@@ -1,0 +1,16 @@
+{
+  "rounds": [
+    {
+      "lanes": [
+        {"gpu": 0, "label": "device_batch_8", "env": {"DEVICE_BATCH_SIZE": "8"}},
+        {"gpu": 1, "label": "device_batch_16", "env": {"DEVICE_BATCH_SIZE": "16"}}
+      ]
+    },
+    {
+      "lanes": [
+        {"gpu": 0, "label": "device_batch_16", "env": {"DEVICE_BATCH_SIZE": "16"}},
+        {"gpu": 1, "label": "device_batch_8", "env": {"DEVICE_BATCH_SIZE": "8"}}
+      ]
+    }
+  ]
+}

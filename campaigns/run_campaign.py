@@ -62,15 +62,93 @@ PLAN = (
     ("zero_final_lr", {"FINAL_LR_FRAC": "0.0"}),
 )
 
+ALLOWED_OVERRIDE_KEYS = frozenset(BASE_ENV)
+
+
+@dataclass(frozen=True)
+class LaneSpec:
+    gpu: int
+    seed: int
+    label: str
+    overrides: dict[str, str]
+
 
 @dataclass
 class ChildRun:
     gpu: int
+    seed: int
+    label: str
+    overrides: dict[str, str]
     run_id: str
     log_path: Path
     metric_path: Path
     process: subprocess.Popen[Any]
     log_handle: Any
+
+
+def paired_plan() -> list[list[LaneSpec]]:
+    return [
+        [
+            LaneSpec(gpu=gpu, seed=SEEDS[gpu], label=label, overrides=dict(overrides))
+            for gpu in range(len(SEEDS))
+        ]
+        for label, overrides in PLAN
+    ]
+
+
+def load_plan(path: Path) -> list[list[LaneSpec]]:
+    """Load a two-lane experiment plan with explicit, allow-listed overrides."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    raw_rounds = payload.get("rounds")
+    if not isinstance(raw_rounds, list) or not raw_rounds:
+        raise ValueError("plan must contain a non-empty 'rounds' list")
+    rounds: list[list[LaneSpec]] = []
+    for round_number, raw_round in enumerate(raw_rounds, start=1):
+        raw_lanes = raw_round.get("lanes") if isinstance(raw_round, dict) else None
+        if not isinstance(raw_lanes, list) or len(raw_lanes) != len(SEEDS):
+            raise ValueError(f"round {round_number} must define exactly {len(SEEDS)} lanes")
+        lanes: list[LaneSpec] = []
+        for raw_lane in raw_lanes:
+            if not isinstance(raw_lane, dict):
+                raise ValueError(f"round {round_number} contains a non-object lane")
+            gpu = raw_lane.get("gpu")
+            label = raw_lane.get("label")
+            overrides = raw_lane.get("env", {})
+            if gpu not in range(len(SEEDS)) or not isinstance(label, str) or not label:
+                raise ValueError(f"round {round_number} has an invalid gpu or label")
+            if not isinstance(overrides, dict):
+                raise ValueError(f"round {round_number} lane {gpu} env must be an object")
+            unknown = set(overrides) - ALLOWED_OVERRIDE_KEYS
+            if unknown:
+                raise ValueError(f"round {round_number} lane {gpu} has unsupported env keys: {sorted(unknown)}")
+            lanes.append(LaneSpec(
+                gpu=gpu,
+                seed=SEEDS[gpu],
+                label=label,
+                overrides={key: str(value) for key, value in overrides.items()},
+            ))
+        if sorted(lane.gpu for lane in lanes) != list(range(len(SEEDS))):
+            raise ValueError(f"round {round_number} must assign each GPU exactly once")
+        rounds.append(sorted(lanes, key=lambda lane: lane.gpu))
+    return rounds
+
+
+def serialize_plan(plan: list[list[LaneSpec]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "round": round_number,
+            "lanes": [
+                {
+                    "gpu": lane.gpu,
+                    "seed": lane.seed,
+                    "label": lane.label,
+                    "env": dict(lane.overrides),
+                }
+                for lane in lanes
+            ],
+        }
+        for round_number, lanes in enumerate(plan, start=1)
+    ]
 
 
 def utc_stamp() -> str:
@@ -160,11 +238,10 @@ def control_event(campaign_id: str, kind: str, **payload: Any) -> dict[str, Any]
     }
 
 
-def launch_pair(
+def launch_round(
     campaign_id: str,
     round_number: int,
-    label: str,
-    overrides: dict[str, str],
+    lanes: list[LaneSpec],
     budget_seconds: int,
     python: str,
     dashboard: dict[str, str],
@@ -176,7 +253,8 @@ def launch_pair(
     logs.mkdir(parents=True, exist_ok=True)
     metrics.mkdir(parents=True, exist_ok=True)
     children: list[ChildRun] = []
-    for gpu, seed in enumerate(SEEDS):
+    for lane in lanes:
+        gpu, seed, label, overrides = lane.gpu, lane.seed, lane.label, lane.overrides
         run_id = f"{campaign_id}-r{round_number:02d}-gpu{gpu}-{label}-s{seed}"
         log_path = logs / f"{run_id}.log"
         metric_path = metrics / f"{run_id}.jsonl"
@@ -202,7 +280,10 @@ def launch_pair(
             [python, "-u", "train.py"], cwd=REPO, env=env,
             stdout=log_handle, stderr=subprocess.STDOUT, start_new_session=True,
         )
-        children.append(ChildRun(gpu, run_id, log_path, metric_path, process, log_handle))
+        children.append(ChildRun(
+            gpu, seed, label, dict(overrides), run_id,
+            log_path, metric_path, process, log_handle,
+        ))
         print(f"launched gpu={gpu} pid={process.pid} run={run_id}", flush=True)
     return children
 
@@ -236,6 +317,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--budget-seconds", type=int, default=DEFAULT_BUDGET_SECONDS)
     parser.add_argument("--rounds", type=int, default=len(PLAN))
+    parser.add_argument("--plan-file", type=Path)
     parser.add_argument("--campaign-id", default=f"codex-30m-{utc_stamp().lower()}")
     parser.add_argument("--python", default="/home/mark/autoresearch-transformer-paper/.venv/bin/python")
     parser.add_argument("--dashboard-env", type=Path, default=Path.home() / ".config/autoresearch-dashboard.env")
@@ -249,7 +331,8 @@ def main() -> int:
         raise SystemExit("budget must be at least 30 seconds")
     if not 70 <= args.max_gpu_temp_c <= 95:
         raise SystemExit("max GPU temperature must be between 70C and 95C")
-    round_plan = PLAN[: max(1, min(args.rounds, len(PLAN)))]
+    full_plan = load_plan(args.plan_file) if args.plan_file else paired_plan()
+    round_plan = full_plan[: max(1, min(args.rounds, len(full_plan)))]
     campaign_root = REPO / "campaign-results" / args.campaign_id
     state_path = campaign_root / "state.json"
     dashboard = load_dashboard_env(args.dashboard_env)
@@ -261,6 +344,7 @@ def main() -> int:
         "code_sha": code_sha, "started_at": time.time(),
         "estimated_end_at": end_estimate, "runs": [],
         "max_gpu_temp_c": args.max_gpu_temp_c,
+        "resolved_plan": serialize_plan(round_plan),
     }
     write_state(state_path, state)
     post_event(control_event(
@@ -279,12 +363,16 @@ def main() -> int:
     signal.signal(signal.SIGINT, request_stop)
 
     try:
-        for round_number, (label, overrides) in enumerate(round_plan, start=1):
+        for round_number, lanes in enumerate(round_plan, start=1):
             if stopping:
                 break
-            post_event(control_event(args.campaign_id, "round_start", round=round_number, experiment_label=label), dashboard)
-            active = launch_pair(
-                args.campaign_id, round_number, label, overrides, args.budget_seconds,
+            labels = [lane.label for lane in lanes]
+            post_event(control_event(
+                args.campaign_id, "round_start", round=round_number,
+                experiment_labels=labels,
+            ), dashboard)
+            active = launch_round(
+                args.campaign_id, round_number, lanes, args.budget_seconds,
                 args.python, dashboard, code_sha, campaign_root,
             )
             hard_deadline = time.time() + args.budget_seconds + 600
@@ -317,7 +405,7 @@ def main() -> int:
                     terminate_children(active)
                     break
                 state["active_round"] = round_number
-                state["active_experiment"] = label
+                state["active_experiments"] = labels
                 state["active_runs"] = [
                     {"gpu": child.gpu, "run_id": child.run_id, "pid": child.process.pid,
                      "returncode": child.process.poll()} for child in active
@@ -332,8 +420,8 @@ def main() -> int:
                 child.log_handle.close()
                 final = read_final(child.metric_path)
                 result = {
-                    "round": round_number, "experiment": label, "gpu": child.gpu,
-                    "seed": SEEDS[child.gpu], "run_id": child.run_id,
+                    "round": round_number, "experiment": child.label, "gpu": child.gpu,
+                    "seed": child.seed, "env": child.overrides, "run_id": child.run_id,
                     "returncode": returncode,
                     "status": "ok" if returncode == 0 and final else "failed",
                     "val_bpb": final.get("val_bpb") if final else None,
@@ -344,7 +432,7 @@ def main() -> int:
             write_state(state_path, state)
             post_event(control_event(
                 args.campaign_id, "round_complete", round=round_number,
-                experiment_label=label, results=round_results,
+                experiment_labels=labels, results=round_results,
             ), dashboard)
             active = []
     finally:
