@@ -41,7 +41,10 @@ The campaign is a funnel rather than an open-ended random search:
    residuals from [ResFormer](https://arxiv.org/abs/2410.17897), and blockwise
    [Attention Residuals](https://arxiv.org/abs/2603.15031) only on the stable
    optimizer recipe.
-6. **Long confirmation:** spend 30-60 minutes per lane only on the strongest
+6. **Numerical efficiency:** compare FP16 with BF16 using the same stable
+   recipe, motivated by BF16's FP32-like exponent range in
+   [A Study of BFLOAT16 for Deep Learning Training](https://arxiv.org/abs/1905.12322).
+7. **Long confirmation:** spend 30-60 minutes per lane only on the strongest
    survivor and its stable control.
 
 Mixed-precision master weights are available as a diagnostic based on

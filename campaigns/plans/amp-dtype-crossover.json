@@ -1,0 +1,60 @@
+{
+  "rounds": [
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "amp_bf16",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
+            "AMP_DTYPE": "bf16"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "amp_fp16",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
+            "AMP_DTYPE": "fp16"
+          }
+        }
+      ]
+    },
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "amp_fp16",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
+            "AMP_DTYPE": "fp16"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "amp_bf16",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
+            "AMP_DTYPE": "bf16"
+          }
+        }
+      ]
+    }
+  ]
+}
