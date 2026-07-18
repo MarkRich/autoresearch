@@ -101,15 +101,18 @@ class CampaignTests(unittest.TestCase):
 
     def test_campaign_summary_ranks_paired_means_not_lucky_minimum(self):
         rows = summary.summarize_runs([
-            {"experiment": "noisy", "status": "ok", "val_bpb": 2.0},
-            {"experiment": "noisy", "status": "ok", "val_bpb": 4.0},
-            {"experiment": "stable", "status": "ok", "val_bpb": 2.8},
-            {"experiment": "stable", "status": "ok", "val_bpb": 2.9},
+            {"experiment": "noisy", "status": "ok", "val_bpb": 2.0, "gpu": 0, "seed": 101},
+            {"experiment": "noisy", "status": "ok", "val_bpb": 4.0, "gpu": 1, "seed": 202},
+            {"experiment": "stable", "status": "ok", "val_bpb": 2.8, "gpu": 0, "seed": 101},
+            {"experiment": "stable", "status": "ok", "val_bpb": 2.9, "gpu": 1, "seed": 202},
             {"experiment": "failed", "status": "failed", "val_bpb": 1.0},
+            {"experiment": "smoke", "status": "ok", "val_bpb": 2.7, "gpu": 0, "seed": 101},
         ])
-        self.assertEqual([row["experiment"] for row in rows], ["stable", "noisy"])
-        self.assertAlmostEqual(rows[0]["mean_val_bpb"], 2.85)
-        self.assertAlmostEqual(rows[1]["spread"], 2.0)
+        by_name = {row["experiment"]: row for row in rows}
+        self.assertAlmostEqual(by_name["stable"]["mean_val_bpb"], 2.85)
+        self.assertAlmostEqual(by_name["noisy"]["spread"], 2.0)
+        self.assertTrue(by_name["stable"]["promotion_eligible"])
+        self.assertFalse(by_name["smoke"]["promotion_eligible"])
 
     def test_launch_round_uses_campaign_specific_work_tag(self):
         lane = campaign.LaneSpec(gpu=0, seed=101, label="control", overrides={})

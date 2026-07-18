@@ -19,9 +19,15 @@ def summarize_runs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
     for experiment, items in grouped.items():
         scores = [float(item["val_bpb"]) for item in items]
+        distinct_gpus = {item.get("gpu") for item in items}
+        distinct_seeds = {item.get("seed") for item in items}
+        promotion_eligible = (
+            len(scores) >= 2 and len(distinct_gpus) >= 2 and len(distinct_seeds) >= 2
+        )
         rows.append({
             "experiment": experiment,
             "n": len(scores),
+            "promotion_eligible": promotion_eligible,
             "mean_val_bpb": statistics.fmean(scores),
             "min_val_bpb": min(scores),
             "max_val_bpb": max(scores),
@@ -37,11 +43,12 @@ def main() -> int:
     args = parser.parse_args()
     state = json.loads(args.state.read_text(encoding="utf-8"))
     rows = summarize_runs(state.get("runs", []))
-    print("experiment\tn\tmean_val_bpb\tspread\tscores")
+    print("experiment\tn\tpromotion_eligible\tmean_val_bpb\tspread\tscores")
     for row in rows:
         scores = ",".join(f"{score:.6f}" for score in row["scores"])
         print(
-            f"{row['experiment']}\t{row['n']}\t{row['mean_val_bpb']:.6f}\t"
+            f"{row['experiment']}\t{row['n']}\t{str(row['promotion_eligible']).lower()}\t"
+            f"{row['mean_val_bpb']:.6f}\t"
             f"{row['spread']:.6f}\t{scores}"
         )
     return 0
