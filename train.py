@@ -86,6 +86,7 @@ FAILFAST_MIN_PROGRESS = _env_float("FAILFAST_MIN_PROGRESS", 0.15)
 FAILFAST_MIN_STEPS = _env_int("FAILFAST_MIN_STEPS", 80)
 TRAIN_PROBE_BATCHES = _env_int("TRAIN_PROBE_BATCHES", 4)
 GRAD_CLIP_NORM = _env_float("GRAD_CLIP_NORM", 0.0)
+UNCOUNTED_WARMUP_STEPS = _env_int("UNCOUNTED_WARMUP_STEPS", 0)
 FAILFAST_REGRESSION_MIN_STEPS = _env_int("FAILFAST_REGRESSION_MIN_STEPS", 40)
 FAILFAST_REGRESSION_MIN_RISE = _env_float("FAILFAST_REGRESSION_MIN_RISE", 0.35)
 FAILFAST_REGRESSION_PATIENCE_EVENTS = _env_int("FAILFAST_REGRESSION_PATIENCE_EVENTS", 3)
@@ -795,6 +796,7 @@ emit_event(
         failfast_min_steps=FAILFAST_MIN_STEPS,
         train_probe_batches=TRAIN_PROBE_BATCHES,
         grad_clip_norm=GRAD_CLIP_NORM,
+        uncounted_warmup_steps=UNCOUNTED_WARMUP_STEPS,
         attn_residual_mode=ATTN_RESIDUAL_MODE,
         attn_residual_backend=ATTN_RESIDUAL_BACKEND,
         attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
@@ -863,6 +865,7 @@ print(f"Gradient accumulation steps: {grad_accum_steps}")
 print(f"Random-loss baseline ln(vocab): {math.log(vocab_size):.6f}; fail-fast margin: {FAILFAST_RANDOM_MARGIN:.3f}")
 print(f"Fixed train probe batches: {len(train_probe_batches)}")
 print(f"Gradient clipping: {GRAD_CLIP_NORM if GRAD_CLIP_NORM > 0 else 'disabled'}")
+print(f"Uncounted compiler warm-up steps: {UNCOUNTED_WARMUP_STEPS}")
 print(
     "Fixed-probe regression fail-fast: "
     f"rise>{FAILFAST_REGRESSION_MIN_RISE:.3f} after step {FAILFAST_REGRESSION_MIN_STEPS} "
@@ -970,7 +973,7 @@ while True:
     t1 = time.time()
     dt = t1 - t0
 
-    if step > 10:
+    if step >= UNCOUNTED_WARMUP_STEPS:
         total_training_time += dt
 
     # Logging
@@ -1091,13 +1094,15 @@ while True:
 
     step += 1
 
-    # Time's up — but only stop after warmup steps so we don't count compilation
-    if step > 10 and total_training_time >= TIME_BUDGET:
+    # Time's up. Compiler-only warm-up steps can be excluded explicitly, while
+    # eager runs count useful work from the first step.
+    if step > UNCOUNTED_WARMUP_STEPS and total_training_time >= TIME_BUDGET:
         break
 
 print()  # newline after \r training log
 
-total_tokens = step * TOTAL_BATCH_SIZE
+counted_steps = max(0, step - UNCOUNTED_WARMUP_STEPS)
+total_tokens = counted_steps * TOTAL_BATCH_SIZE
 
 # Final eval
 model.eval()
@@ -1107,7 +1112,7 @@ with autocast_ctx:
 # Final summary
 t_end = time.time()
 startup_time = t_start_training - t_start
-steady_state_mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE * (step - 10) / total_training_time / REFERENCE_PEAK_FLOPS if total_training_time > 0 else 0
+steady_state_mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE * counted_steps / total_training_time / REFERENCE_PEAK_FLOPS if total_training_time > 0 else 0
 peak_vram_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
 
 print("---")
@@ -1130,6 +1135,7 @@ emit_event(
     mfu_percent=steady_state_mfu,
     total_tokens_m=total_tokens / 1e6,
     num_steps=step,
+    counted_steps=counted_steps,
     num_params_m=num_params / 1e6,
     depth=DEPTH,
     experiment_label=EXPERIMENT_LABEL,
@@ -1193,6 +1199,7 @@ if CHECKPOINT_IF_BEST and val_bpb < CHECKPOINT_BEST_VAL_BPB:
                 use_value_embeds=USE_VALUE_EMBEDS,
                 optimizer_kind=OPTIMIZER_KIND,
                 mlp_kind=MLP_KIND,
+                uncounted_warmup_steps=UNCOUNTED_WARMUP_STEPS,
                 aspect_ratio=ASPECT_RATIO,
                 head_dim=HEAD_DIM,
                 embedding_lr=EMBEDDING_LR,

@@ -5,7 +5,11 @@
         {
           "gpu": 0,
           "label": "batch8_compile",
-          "env": {"DEVICE_BATCH_SIZE": "8", "OPENCLAW_DISABLE_TORCH_COMPILE": "0"}
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "OPENCLAW_DISABLE_TORCH_COMPILE": "0",
+            "UNCOUNTED_WARMUP_STEPS": "11"
+          }
         },
         {
           "gpu": 1,
@@ -24,7 +28,11 @@
         {
           "gpu": 1,
           "label": "batch8_compile",
-          "env": {"DEVICE_BATCH_SIZE": "8", "OPENCLAW_DISABLE_TORCH_COMPILE": "0"}
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "OPENCLAW_DISABLE_TORCH_COMPILE": "0",
+            "UNCOUNTED_WARMUP_STEPS": "11"
+          }
         }
       ]
     }
