@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Run a finite, paired two-GPU autoresearch campaign.
+"""Run a finite, independent-lane two-GPU autoresearch campaign.
 
-Each round sends the same experiment to both GPU lanes with different fixed
-seeds. This makes comparisons about repeatable changes, not one lucky run.
-The default plan is six 30-minute rounds: roughly three hours.
+The default plan sends the same treatment to both GPU lanes with different
+fixed seeds. Explicit JSON plans can instead run crossover experiments while
+preserving one process per GPU and complete provenance for every lane.
 """
 
 from __future__ import annotations
@@ -257,6 +257,7 @@ def launch_round(
     logs.mkdir(parents=True, exist_ok=True)
     metrics.mkdir(parents=True, exist_ok=True)
     children: list[ChildRun] = []
+    work_tag = os.environ.get("CODEX_WORK_TAG", f"autoresearch:{campaign_id}")
     for lane in lanes:
         gpu, seed, label, overrides = lane.gpu, lane.seed, lane.label, lane.overrides
         run_id = f"{campaign_id}-r{round_number:02d}-gpu{gpu}-{label}-s{seed}"
@@ -267,7 +268,7 @@ def launch_round(
         env.update(overrides)
         env.update(dashboard)
         env.update({
-            "CODEX_WORK_TAG": "autoresearch-30m-campaign",
+            "CODEX_WORK_TAG": work_tag,
             "CUDA_VISIBLE_DEVICES": str(gpu),
             "TIME_BUDGET_SECONDS": str(budget_seconds),
             "AUTORESEARCH_RUN_ID": run_id,

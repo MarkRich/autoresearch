@@ -1,8 +1,10 @@
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -99,6 +101,18 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual([row["experiment"] for row in rows], ["stable", "noisy"])
         self.assertAlmostEqual(rows[0]["mean_val_bpb"], 2.85)
         self.assertAlmostEqual(rows[1]["spread"], 2.0)
+
+    def test_launch_round_uses_campaign_specific_work_tag(self):
+        lane = campaign.LaneSpec(gpu=0, seed=101, label="control", overrides={})
+        fake_process = mock.Mock(pid=1234)
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch.object(campaign.subprocess, "Popen", return_value=fake_process) as popen:
+            children = campaign.launch_round(
+                "trace-me", 1, [lane], 60, "python", {}, "abc123", Path(tmp),
+            )
+            children[0].log_handle.close()
+        self.assertEqual(popen.call_args.kwargs["env"]["CODEX_WORK_TAG"], "autoresearch:trace-me")
 
 
 if __name__ == "__main__":
