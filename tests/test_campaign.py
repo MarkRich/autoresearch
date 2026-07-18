@@ -30,6 +30,7 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(campaign.BASE_ENV["OPENCLAW_FORCE_SDPA"], "1")
         self.assertEqual(campaign.BASE_ENV["WINDOW_PATTERN"], "LLLL")
         self.assertEqual(campaign.BASE_ENV["GRAD_CLIP_NORM"], "0")
+        self.assertEqual(campaign.BASE_ENV["MLP_KIND"], "relu_squared")
 
     def test_reads_the_last_final_metric(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -79,6 +79,7 @@ def _env_int(name, default):
 EXPERIMENT_LABEL = os.environ.get("EXPERIMENT_LABEL", "baseline")
 USE_VALUE_EMBEDS = _env_bool("USE_VALUE_EMBEDS", True)
 OPTIMIZER_KIND = os.environ.get("OPTIMIZER_KIND", "muon").strip().lower()
+MLP_KIND = os.environ.get("MLP_KIND", "relu_squared").strip().lower()
 SANITY_REUSE_FIRST_BATCH = _env_bool("SANITY_REUSE_FIRST_BATCH", False)
 FAILFAST_RANDOM_MARGIN = _env_float("FAILFAST_RANDOM_MARGIN", 0.04)
 FAILFAST_MIN_PROGRESS = _env_float("FAILFAST_MIN_PROGRESS", 0.15)
@@ -250,12 +251,27 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
+        if MLP_KIND == "swiglu":
+            # A parameter-matched SwiGLU FFN uses roughly 8d/3 hidden units.
+            # Round to an Ampere-friendly multiple without materially changing
+            # the parameter budget relative to the 4d ReLU-squared baseline.
+            self.hidden_dim = 128 * round((8 * config.n_embd / 3) / 128)
+            self.c_fc = nn.Linear(config.n_embd, 2 * self.hidden_dim, bias=False)
+            self.c_proj = nn.Linear(self.hidden_dim, config.n_embd, bias=False)
+        elif MLP_KIND == "relu_squared":
+            self.hidden_dim = 4 * config.n_embd
+            self.c_fc = nn.Linear(config.n_embd, self.hidden_dim, bias=False)
+            self.c_proj = nn.Linear(self.hidden_dim, config.n_embd, bias=False)
+        else:
+            raise ValueError(f"Unknown MLP_KIND={MLP_KIND!r}; expected 'relu_squared' or 'swiglu'")
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = F.relu(x).square()
+        if MLP_KIND == "swiglu":
+            gate, value = x.chunk(2, dim=-1)
+            x = F.silu(gate) * value
+        else:
+            x = F.relu(x).square()
         x = self.c_proj(x)
         return x
 
@@ -729,6 +745,7 @@ autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=_amp_dtype)
 print(f"Experiment label: {EXPERIMENT_LABEL}", flush=True)
 print(f"Use value embeddings: {USE_VALUE_EMBEDS}", flush=True)
 print(f"Optimizer kind: {OPTIMIZER_KIND}", flush=True)
+print(f"MLP kind: {MLP_KIND}", flush=True)
 print(f"Attention residual mode/backend/block: {ATTN_RESIDUAL_MODE}/{ATTN_RESIDUAL_BACKEND}/{ATTN_RESIDUAL_BLOCK_SIZE}", flush=True)
 print(f"flash-attn-res available: {HAS_FLASH_ATTN_RES}", flush=True)
 print(f"AMP dtype: {_amp_dtype}", flush=True)
@@ -759,6 +776,7 @@ emit_event(
     hparams=dict(
         use_value_embeds=USE_VALUE_EMBEDS,
         optimizer_kind=OPTIMIZER_KIND,
+        mlp_kind=MLP_KIND,
         aspect_ratio=ASPECT_RATIO,
         head_dim=HEAD_DIM,
         embedding_lr=EMBEDDING_LR,
@@ -1118,6 +1136,7 @@ emit_event(
     use_value_embeds=USE_VALUE_EMBEDS,
     window_pattern=WINDOW_PATTERN,
     optimizer_kind=OPTIMIZER_KIND,
+    mlp_kind=MLP_KIND,
     attn_residual_mode=ATTN_RESIDUAL_MODE,
     attn_residual_backend=ATTN_RESIDUAL_BACKEND,
     attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
@@ -1173,6 +1192,7 @@ if CHECKPOINT_IF_BEST and val_bpb < CHECKPOINT_BEST_VAL_BPB:
             "hparams": dict(
                 use_value_embeds=USE_VALUE_EMBEDS,
                 optimizer_kind=OPTIMIZER_KIND,
+                mlp_kind=MLP_KIND,
                 aspect_ratio=ASPECT_RATIO,
                 head_dim=HEAD_DIM,
                 embedding_lr=EMBEDDING_LR,

@@ -1,0 +1,32 @@
+{
+  "rounds": [
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "swiglu",
+          "env": {"DEVICE_BATCH_SIZE": "16", "MLP_KIND": "swiglu"}
+        },
+        {
+          "gpu": 1,
+          "label": "relu_squared",
+          "env": {"DEVICE_BATCH_SIZE": "16"}
+        }
+      ]
+    },
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "relu_squared",
+          "env": {"DEVICE_BATCH_SIZE": "16"}
+        },
+        {
+          "gpu": 1,
+          "label": "swiglu",
+          "env": {"DEVICE_BATCH_SIZE": "16", "MLP_KIND": "swiglu"}
+        }
+      ]
+    }
+  ]
+}

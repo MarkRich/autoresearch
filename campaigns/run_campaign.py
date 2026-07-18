@@ -36,6 +36,7 @@ BASE_ENV = {
     "ASPECT_RATIO": "64",
     "HEAD_DIM": "128",
     "USE_VALUE_EMBEDS": "1",
+    "MLP_KIND": "relu_squared",
     "OPTIMIZER_KIND": "muon",
     "EMBEDDING_LR": "0.010",
     "UNEMBEDDING_LR": "0.002",
