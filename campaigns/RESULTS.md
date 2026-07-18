@@ -49,6 +49,8 @@ useful check that the harness and validation path are repeatable.
 | same | 60 s | quarter LR | 3.110100 | Confirmed eager work is counted |
 | `codex-6h-fp32-smoke-20260718-053304` | 60 s | FP32 Adam state/master | 3.021920 | Healthy, about 160 MB extra, neutral screen |
 | same | 60 s | native state | 3.020228 | Control |
+| `codex-6h-swiglu-10m-20260718-060014` | 600 s | parameter-matched SwiGLU | 2.463151, 2.422131 | Mean 2.442641; reject |
+| same | 600 s | ReLU-squared | 2.434733, 2.443788 | Mean 2.439260; retain |
 
 The budget-accounting fix produced 13 counted optimizer steps and roughly
 60-62 seconds of measured training per lane. Before the fix, eager experiments
@@ -59,6 +61,13 @@ with an approximately parameter-matched hidden dimension. FP32 Adam state and
 master weights follow the numerical-safety idea in
 [Mixed Precision Training](https://arxiv.org/abs/1710.03740). Neither smoke
 result is treated as evidence of a model improvement by itself.
+
+The full SwiGLU crossover demonstrated a hardware-dependent efficiency/quality
+trade. SwiGLU completed 133 steps (69.73M tokens) on thermally constrained GPU
+0 and 140 steps (73.40M tokens) on GPU 1, versus 128 and 123 steps for ReLU
+squared. Its 2.442641 paired mean was nevertheless 0.003381 worse than ReLU
+squared, and its 0.041020 spread was more than four times the control spread.
+SwiGLU remains a tested optional implementation but is not the incumbent.
 
 ## Promotion policy
 
