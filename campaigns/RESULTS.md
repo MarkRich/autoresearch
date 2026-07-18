@@ -53,6 +53,8 @@ useful check that the harness and validation path are repeatable.
 | same | 600 s | ReLU-squared | 2.434733, 2.443788 | Mean 2.439260; retain |
 | `codex-6h-amp-10m-20260718-062405` | 600 s | BF16 autocast | 2.009695, 1.995127 | Mean 2.002411; promote |
 | same | 600 s | FP16 autocast | 2.434835, 2.443807 | Mean 2.439321; reject |
+| `codex-6h-value-bf16-10m-20260718-065236` | 600 s | no value residuals | 1.989508, 2.003576 | Mean 1.996542; promote |
+| same | 600 s | ResFormer value residuals | 2.007387, 1.994961 | Mean 2.001174; reject |
 
 The budget-accounting fix produced 13 counted optimizer steps and roughly
 60-62 seconds of measured training per lane. Before the fix, eager experiments
@@ -78,6 +80,14 @@ ended at their best values. FP16 gradients stayed extremely small through the
 early schedule before rising sharply; this unscaled mixed-precision loop was
 discarding useful signal. BF16's wider exponent range preserved it and is now
 the campaign default on this Ampere host.
+
+Removing the ResFormer-inspired value residuals improved the paired mean by
+0.004631 while reducing the model from 50.33M to 33.55M parameters. It also
+saved about 193 MB of peak allocated VRAM and improved throughput by roughly
+2 percent in both placements. The value-residual model learned slightly faster
+per optimizer step, but the leaner model completed more useful steps inside the
+fixed wall-clock budget and won the deciding metric. Value residuals are now
+disabled in the default recipe.
 
 ## Promotion policy
 

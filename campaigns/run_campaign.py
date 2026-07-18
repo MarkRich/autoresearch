@@ -26,7 +26,7 @@ DEFAULT_MAX_GPU_TEMP_C = 88
 SEEDS = (101, 202)
 
 BASE_ENV = {
-    "DEVICE_BATCH_SIZE": "2",
+    "DEVICE_BATCH_SIZE": "8",
     "TOTAL_BATCH_SIZE": str(2**19),
     "AMP_DTYPE": "bf16",
     "OPENCLAW_FORCE_SDPA": "1",
@@ -36,7 +36,7 @@ BASE_ENV = {
     "DEPTH": "8",
     "ASPECT_RATIO": "64",
     "HEAD_DIM": "128",
-    "USE_VALUE_EMBEDS": "1",
+    "USE_VALUE_EMBEDS": "0",
     "MLP_KIND": "relu_squared",
     "ATTN_RESIDUAL_MODE": "none",
     "ATTN_RESIDUAL_BACKEND": "package",
@@ -44,10 +44,10 @@ BASE_ENV = {
     "ATTN_OUTPUT_GATE": "none",
     "OPTIMIZER_KIND": "muon",
     "FP32_ADAM_STATE": "0",
-    "EMBEDDING_LR": "0.010",
-    "UNEMBEDDING_LR": "0.002",
-    "MATRIX_LR": "0.0020",
-    "SCALAR_LR": "0.010",
+    "EMBEDDING_LR": "0.0025",
+    "UNEMBEDDING_LR": "0.0005",
+    "MATRIX_LR": "0.0005",
+    "SCALAR_LR": "0.0025",
     "WEIGHT_DECAY": "0.01",
     "ADAM_BETA1": "0.8",
     "ADAM_BETA2": "0.95",
@@ -65,9 +65,9 @@ BASE_ENV = {
 
 PLAN = (
     ("control", {}),
-    ("no_value_embeddings", {"USE_VALUE_EMBEDS": "0"}),
-    ("matrix_lr_0015", {"MATRIX_LR": "0.0015"}),
-    ("matrix_lr_0025", {"MATRIX_LR": "0.0025"}),
+    ("value_residuals", {"USE_VALUE_EMBEDS": "1"}),
+    ("matrix_lr_eighth", {"MATRIX_LR": "0.00025"}),
+    ("scalar_lr_eighth", {"SCALAR_LR": "0.00125"}),
     ("warmdown_70", {"WARMDOWN_RATIO": "0.70"}),
     ("zero_final_lr", {"FINAL_LR_FRAC": "0.0"}),
 )
