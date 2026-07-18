@@ -6,7 +6,7 @@
           "gpu": 0,
           "label": "attnres_block4",
           "env": {
-            "DEVICE_BATCH_SIZE": "16",
+            "DEVICE_BATCH_SIZE": "8",
             "USE_VALUE_EMBEDS": "0",
             "ATTN_RESIDUAL_MODE": "block",
             "ATTN_RESIDUAL_BACKEND": "package",
@@ -16,7 +16,7 @@
         {
           "gpu": 1,
           "label": "standard_residual",
-          "env": {"DEVICE_BATCH_SIZE": "16", "USE_VALUE_EMBEDS": "0"}
+          "env": {"DEVICE_BATCH_SIZE": "8", "USE_VALUE_EMBEDS": "0"}
         }
       ]
     },
@@ -25,13 +25,13 @@
         {
           "gpu": 0,
           "label": "standard_residual",
-          "env": {"DEVICE_BATCH_SIZE": "16", "USE_VALUE_EMBEDS": "0"}
+          "env": {"DEVICE_BATCH_SIZE": "8", "USE_VALUE_EMBEDS": "0"}
         },
         {
           "gpu": 1,
           "label": "attnres_block4",
           "env": {
-            "DEVICE_BATCH_SIZE": "16",
+            "DEVICE_BATCH_SIZE": "8",
             "USE_VALUE_EMBEDS": "0",
             "ATTN_RESIDUAL_MODE": "block",
             "ATTN_RESIDUAL_BACKEND": "package",

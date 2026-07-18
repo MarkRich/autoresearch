@@ -4,13 +4,13 @@
       "lanes": [
         {
           "gpu": 0,
-          "label": "batch16_compile",
-          "env": {"DEVICE_BATCH_SIZE": "16", "OPENCLAW_DISABLE_TORCH_COMPILE": "0"}
+          "label": "batch8_compile",
+          "env": {"DEVICE_BATCH_SIZE": "8", "OPENCLAW_DISABLE_TORCH_COMPILE": "0"}
         },
         {
           "gpu": 1,
-          "label": "batch16_eager",
-          "env": {"DEVICE_BATCH_SIZE": "16"}
+          "label": "batch8_eager",
+          "env": {"DEVICE_BATCH_SIZE": "8"}
         }
       ]
     },
@@ -18,13 +18,13 @@
       "lanes": [
         {
           "gpu": 0,
-          "label": "batch16_eager",
-          "env": {"DEVICE_BATCH_SIZE": "16"}
+          "label": "batch8_eager",
+          "env": {"DEVICE_BATCH_SIZE": "8"}
         },
         {
           "gpu": 1,
-          "label": "batch16_compile",
-          "env": {"DEVICE_BATCH_SIZE": "16", "OPENCLAW_DISABLE_TORCH_COMPILE": "0"}
+          "label": "batch8_compile",
+          "env": {"DEVICE_BATCH_SIZE": "8", "OPENCLAW_DISABLE_TORCH_COMPILE": "0"}
         }
       ]
     }

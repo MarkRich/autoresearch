@@ -5,12 +5,12 @@
         {
           "gpu": 0,
           "label": "grad_clip_1",
-          "env": {"DEVICE_BATCH_SIZE": "16", "GRAD_CLIP_NORM": "1.0"}
+          "env": {"DEVICE_BATCH_SIZE": "8", "GRAD_CLIP_NORM": "1.0"}
         },
         {
           "gpu": 1,
           "label": "no_grad_clip",
-          "env": {"DEVICE_BATCH_SIZE": "16"}
+          "env": {"DEVICE_BATCH_SIZE": "8"}
         }
       ]
     },
@@ -19,12 +19,12 @@
         {
           "gpu": 0,
           "label": "no_grad_clip",
-          "env": {"DEVICE_BATCH_SIZE": "16"}
+          "env": {"DEVICE_BATCH_SIZE": "8"}
         },
         {
           "gpu": 1,
           "label": "grad_clip_1",
-          "env": {"DEVICE_BATCH_SIZE": "16", "GRAD_CLIP_NORM": "1.0"}
+          "env": {"DEVICE_BATCH_SIZE": "8", "GRAD_CLIP_NORM": "1.0"}
         }
       ]
     }

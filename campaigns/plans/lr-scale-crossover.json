@@ -6,7 +6,7 @@
           "gpu": 0,
           "label": "muon_lr_half",
           "env": {
-            "DEVICE_BATCH_SIZE": "16",
+            "DEVICE_BATCH_SIZE": "8",
             "EMBEDDING_LR": "0.005",
             "UNEMBEDDING_LR": "0.001",
             "MATRIX_LR": "0.001",
@@ -17,7 +17,7 @@
           "gpu": 1,
           "label": "muon_lr_quarter",
           "env": {
-            "DEVICE_BATCH_SIZE": "16",
+            "DEVICE_BATCH_SIZE": "8",
             "EMBEDDING_LR": "0.0025",
             "UNEMBEDDING_LR": "0.0005",
             "MATRIX_LR": "0.0005",
@@ -32,7 +32,7 @@
           "gpu": 0,
           "label": "muon_lr_quarter",
           "env": {
-            "DEVICE_BATCH_SIZE": "16",
+            "DEVICE_BATCH_SIZE": "8",
             "EMBEDDING_LR": "0.0025",
             "UNEMBEDDING_LR": "0.0005",
             "MATRIX_LR": "0.0005",
@@ -43,7 +43,7 @@
           "gpu": 1,
           "label": "muon_lr_half",
           "env": {
-            "DEVICE_BATCH_SIZE": "16",
+            "DEVICE_BATCH_SIZE": "8",
             "EMBEDDING_LR": "0.005",
             "UNEMBEDDING_LR": "0.001",
             "MATRIX_LR": "0.001",
