@@ -42,6 +42,15 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(campaign.BASE_ENV["MLP_KIND"], "relu_squared")
         self.assertEqual(campaign.BASE_ENV["UNCOUNTED_WARMUP_STEPS"], "0")
         self.assertEqual(campaign.BASE_ENV["FP32_ADAM_STATE"], "0")
+        self.assertEqual(campaign.BASE_ENV["ATTN_RESIDUAL_MODE"], "none")
+        self.assertEqual(campaign.BASE_ENV["FAILFAST_REGRESSION_MIN_RISE"], "0.50")
+        self.assertEqual(campaign.BASE_ENV["FAILFAST_REGRESSION_PATIENCE_EVENTS"], "3")
+
+    def test_all_checked_in_lane_plans_are_loadable(self):
+        plans = MODULE_PATH.parent / "plans"
+        loaded = {path.name: campaign.load_plan(path) for path in plans.glob("*.json")}
+        self.assertIn("attnres-crossover.json", loaded)
+        self.assertTrue(all(rounds for rounds in loaded.values()))
 
     def test_reads_the_last_final_metric(self):
         with tempfile.TemporaryDirectory() as tmp:

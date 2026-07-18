@@ -7,6 +7,10 @@
           "label": "batch8_compile",
           "env": {
             "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
             "OPENCLAW_DISABLE_TORCH_COMPILE": "0",
             "UNCOUNTED_WARMUP_STEPS": "11"
           }
@@ -14,7 +18,13 @@
         {
           "gpu": 1,
           "label": "batch8_eager",
-          "env": {"DEVICE_BATCH_SIZE": "8"}
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025"
+          }
         }
       ]
     },
@@ -23,13 +33,23 @@
         {
           "gpu": 0,
           "label": "batch8_eager",
-          "env": {"DEVICE_BATCH_SIZE": "8"}
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025"
+          }
         },
         {
           "gpu": 1,
           "label": "batch8_compile",
           "env": {
             "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
             "OPENCLAW_DISABLE_TORCH_COMPILE": "0",
             "UNCOUNTED_WARMUP_STEPS": "11"
           }

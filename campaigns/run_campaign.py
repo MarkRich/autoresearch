@@ -38,6 +38,9 @@ BASE_ENV = {
     "HEAD_DIM": "128",
     "USE_VALUE_EMBEDS": "1",
     "MLP_KIND": "relu_squared",
+    "ATTN_RESIDUAL_MODE": "none",
+    "ATTN_RESIDUAL_BACKEND": "package",
+    "ATTN_RESIDUAL_BLOCK_SIZE": "4",
     "OPTIMIZER_KIND": "muon",
     "FP32_ADAM_STATE": "0",
     "EMBEDDING_LR": "0.010",
@@ -52,9 +55,11 @@ BASE_ENV = {
     "FINAL_LR_FRAC": "0.05",
     "TRAIN_PROBE_BATCHES": "4",
     "GRAD_CLIP_NORM": "0",
-    # Observe regressions in telemetry but let every finite run finish.
+    # Random-loss checks are disabled for these short, scheduled runs, but a
+    # sustained fixed-probe regression still saves GPU time on clear collapse.
     "FAILFAST_MIN_PROGRESS": "2.0",
-    "FAILFAST_REGRESSION_MIN_RISE": "1000",
+    "FAILFAST_REGRESSION_MIN_RISE": "0.50",
+    "FAILFAST_REGRESSION_PATIENCE_EVENTS": "3",
 }
 
 PLAN = (

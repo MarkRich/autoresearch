@@ -7,10 +7,10 @@
           "label": "fp32_adam_state",
           "env": {
             "DEVICE_BATCH_SIZE": "8",
-            "EMBEDDING_LR": "0.005",
-            "UNEMBEDDING_LR": "0.001",
-            "MATRIX_LR": "0.001",
-            "SCALAR_LR": "0.005",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
             "FP32_ADAM_STATE": "1"
           }
         },
@@ -19,10 +19,10 @@
           "label": "native_adam_state",
           "env": {
             "DEVICE_BATCH_SIZE": "8",
-            "EMBEDDING_LR": "0.005",
-            "UNEMBEDDING_LR": "0.001",
-            "MATRIX_LR": "0.001",
-            "SCALAR_LR": "0.005"
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025"
           }
         }
       ]
@@ -34,10 +34,10 @@
           "label": "native_adam_state",
           "env": {
             "DEVICE_BATCH_SIZE": "8",
-            "EMBEDDING_LR": "0.005",
-            "UNEMBEDDING_LR": "0.001",
-            "MATRIX_LR": "0.001",
-            "SCALAR_LR": "0.005"
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025"
           }
         },
         {
@@ -45,10 +45,10 @@
           "label": "fp32_adam_state",
           "env": {
             "DEVICE_BATCH_SIZE": "8",
-            "EMBEDDING_LR": "0.005",
-            "UNEMBEDDING_LR": "0.001",
-            "MATRIX_LR": "0.001",
-            "SCALAR_LR": "0.005",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
             "FP32_ADAM_STATE": "1"
           }
         }
