@@ -13,6 +13,13 @@ assert SPEC.loader is not None
 sys.modules[SPEC.name] = campaign
 SPEC.loader.exec_module(campaign)
 
+SUMMARY_PATH = Path(__file__).resolve().parents[1] / "campaigns" / "summarize_campaign.py"
+SUMMARY_SPEC = importlib.util.spec_from_file_location("summarize_campaign", SUMMARY_PATH)
+summary = importlib.util.module_from_spec(SUMMARY_SPEC)
+assert SUMMARY_SPEC.loader is not None
+sys.modules[SUMMARY_SPEC.name] = summary
+SUMMARY_SPEC.loader.exec_module(summary)
+
 
 class CampaignTests(unittest.TestCase):
     def test_default_campaign_is_three_hours_of_paired_30_minute_runs(self):
@@ -79,6 +86,18 @@ class CampaignTests(unittest.TestCase):
             ]}]}), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unsupported env keys"):
                 campaign.load_plan(path)
+
+    def test_campaign_summary_ranks_paired_means_not_lucky_minimum(self):
+        rows = summary.summarize_runs([
+            {"experiment": "noisy", "status": "ok", "val_bpb": 2.0},
+            {"experiment": "noisy", "status": "ok", "val_bpb": 4.0},
+            {"experiment": "stable", "status": "ok", "val_bpb": 2.8},
+            {"experiment": "stable", "status": "ok", "val_bpb": 2.9},
+            {"experiment": "failed", "status": "failed", "val_bpb": 1.0},
+        ])
+        self.assertEqual([row["experiment"] for row in rows], ["stable", "noisy"])
+        self.assertAlmostEqual(rows[0]["mean_val_bpb"], 2.85)
+        self.assertAlmostEqual(rows[1]["spread"], 2.0)
 
 
 if __name__ == "__main__":
