@@ -1,0 +1,56 @@
+{
+  "rounds": [
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "bf16_lr_quarter",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "bf16_lr_eighth",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.00125",
+            "UNEMBEDDING_LR": "0.00025",
+            "MATRIX_LR": "0.00025",
+            "SCALAR_LR": "0.00125"
+          }
+        }
+      ]
+    },
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "bf16_lr_eighth",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.00125",
+            "UNEMBEDDING_LR": "0.00025",
+            "MATRIX_LR": "0.00025",
+            "SCALAR_LR": "0.00125"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "bf16_lr_quarter",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025"
+          }
+        }
+      ]
+    }
+  ]
+}

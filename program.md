@@ -47,6 +47,12 @@ The campaign is a funnel rather than an open-ended random search:
 7. **Long confirmation:** spend 30-60 minutes per lane only on the strongest
    survivor and its stable control.
 
+BF16 is the current numerical incumbent after a placement-swapped 10-minute
+crossover. Before committing an hour to one recipe, compare its quarter-scale
+learning rates with an eighth-scale alternative over 30 minutes per lane. This
+longer horizon tests whether the faster BF16 learning signal needs a lower peak
+rate to preserve late-run stability.
+
 Mixed-precision master weights are available as a diagnostic based on
 [Mixed Precision Training](https://arxiv.org/abs/1710.03740), but are not
 promoted merely because they are theoretically safer; they must improve the
