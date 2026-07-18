@@ -48,6 +48,7 @@ BASE_ENV = {
     "WARMDOWN_RATIO": "0.60",
     "FINAL_LR_FRAC": "0.05",
     "TRAIN_PROBE_BATCHES": "4",
+    "GRAD_CLIP_NORM": "0",
     # Observe regressions in telemetry but let every finite run finish.
     "FAILFAST_MIN_PROGRESS": "2.0",
     "FAILFAST_REGRESSION_MIN_RISE": "1000",

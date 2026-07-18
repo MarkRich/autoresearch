@@ -84,6 +84,7 @@ FAILFAST_RANDOM_MARGIN = _env_float("FAILFAST_RANDOM_MARGIN", 0.04)
 FAILFAST_MIN_PROGRESS = _env_float("FAILFAST_MIN_PROGRESS", 0.15)
 FAILFAST_MIN_STEPS = _env_int("FAILFAST_MIN_STEPS", 80)
 TRAIN_PROBE_BATCHES = _env_int("TRAIN_PROBE_BATCHES", 4)
+GRAD_CLIP_NORM = _env_float("GRAD_CLIP_NORM", 0.0)
 FAILFAST_REGRESSION_MIN_STEPS = _env_int("FAILFAST_REGRESSION_MIN_STEPS", 40)
 FAILFAST_REGRESSION_MIN_RISE = _env_float("FAILFAST_REGRESSION_MIN_RISE", 0.35)
 FAILFAST_REGRESSION_PATIENCE_EVENTS = _env_int("FAILFAST_REGRESSION_PATIENCE_EVENTS", 3)
@@ -775,6 +776,7 @@ emit_event(
         failfast_min_progress=FAILFAST_MIN_PROGRESS,
         failfast_min_steps=FAILFAST_MIN_STEPS,
         train_probe_batches=TRAIN_PROBE_BATCHES,
+        grad_clip_norm=GRAD_CLIP_NORM,
         attn_residual_mode=ATTN_RESIDUAL_MODE,
         attn_residual_backend=ATTN_RESIDUAL_BACKEND,
         attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
@@ -842,6 +844,7 @@ print(f"Time budget: {TIME_BUDGET}s")
 print(f"Gradient accumulation steps: {grad_accum_steps}")
 print(f"Random-loss baseline ln(vocab): {math.log(vocab_size):.6f}; fail-fast margin: {FAILFAST_RANDOM_MARGIN:.3f}")
 print(f"Fixed train probe batches: {len(train_probe_batches)}")
+print(f"Gradient clipping: {GRAD_CLIP_NORM if GRAD_CLIP_NORM > 0 else 'disabled'}")
 print(
     "Fixed-probe regression fail-fast: "
     f"rise>{FAILFAST_REGRESSION_MIN_RISE:.3f} after step {FAILFAST_REGRESSION_MIN_STEPS} "
@@ -860,6 +863,19 @@ def evaluate_train_probe_loss():
     if was_training:
         model.train()
     return sum(losses) / max(1, len(losses))
+
+
+@torch.no_grad()
+def model_diagnostics():
+    """Small, stable signals that make optimizer collapse diagnosable."""
+    wte = model.transformer.wte.weight.float()
+    lm_head = model.lm_head.weight.float()
+    return {
+        "wte_rms": float(wte.square().mean().sqrt().item()),
+        "lm_head_rms": float(lm_head.square().mean().sqrt().item()),
+        "resid_lambda_abs_max": float(model.resid_lambdas.abs().max().item()),
+        "x0_lambda_abs_max": float(model.x0_lambdas.abs().max().item()),
+    }
 
 # Schedules (all based on progress = training_time / TIME_BUDGET)
 
@@ -905,6 +921,12 @@ while True:
         loss.backward()
         if not SANITY_REUSE_FIRST_BATCH:
             x, y, epoch = next(train_loader)
+
+    capture_grad_norm = GRAD_CLIP_NORM > 0 or step == 0 or time.time() - last_emit_time >= 15
+    grad_norm = None
+    if capture_grad_norm:
+        max_norm = GRAD_CLIP_NORM if GRAD_CLIP_NORM > 0 else float("inf")
+        grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm).item())
 
     # Progress and schedules
     progress = min(total_training_time / TIME_BUDGET, 1.0)
@@ -1033,6 +1055,8 @@ while True:
             step_seconds=dt,
             tokens_per_second=tok_per_sec,
             mfu_percent=mfu,
+            grad_norm=grad_norm,
+            model_diagnostics=model_diagnostics(),
             epoch=epoch,
             remaining_seconds=remaining,
             total_training_seconds=total_training_time,
