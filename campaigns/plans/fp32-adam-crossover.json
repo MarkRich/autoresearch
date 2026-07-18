@@ -1,0 +1,58 @@
+{
+  "rounds": [
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "fp32_adam_state",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.005",
+            "UNEMBEDDING_LR": "0.001",
+            "MATRIX_LR": "0.001",
+            "SCALAR_LR": "0.005",
+            "FP32_ADAM_STATE": "1"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "native_adam_state",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.005",
+            "UNEMBEDDING_LR": "0.001",
+            "MATRIX_LR": "0.001",
+            "SCALAR_LR": "0.005"
+          }
+        }
+      ]
+    },
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "native_adam_state",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.005",
+            "UNEMBEDDING_LR": "0.001",
+            "MATRIX_LR": "0.001",
+            "SCALAR_LR": "0.005"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "fp32_adam_state",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.005",
+            "UNEMBEDDING_LR": "0.001",
+            "MATRIX_LR": "0.001",
+            "SCALAR_LR": "0.005",
+            "FP32_ADAM_STATE": "1"
+          }
+        }
+      ]
+    }
+  ]
+}

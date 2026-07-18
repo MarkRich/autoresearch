@@ -39,6 +39,7 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(campaign.BASE_ENV["GRAD_CLIP_NORM"], "0")
         self.assertEqual(campaign.BASE_ENV["MLP_KIND"], "relu_squared")
         self.assertEqual(campaign.BASE_ENV["UNCOUNTED_WARMUP_STEPS"], "0")
+        self.assertEqual(campaign.BASE_ENV["FP32_ADAM_STATE"], "0")
 
     def test_reads_the_last_final_metric(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -80,6 +80,7 @@ EXPERIMENT_LABEL = os.environ.get("EXPERIMENT_LABEL", "baseline")
 USE_VALUE_EMBEDS = _env_bool("USE_VALUE_EMBEDS", True)
 OPTIMIZER_KIND = os.environ.get("OPTIMIZER_KIND", "muon").strip().lower()
 MLP_KIND = os.environ.get("MLP_KIND", "relu_squared").strip().lower()
+FP32_ADAM_STATE = _env_bool("FP32_ADAM_STATE", False)
 SANITY_REUSE_FIRST_BATCH = _env_bool("SANITY_REUSE_FIRST_BATCH", False)
 FAILFAST_RANDOM_MARGIN = _env_float("FAILFAST_RANDOM_MARGIN", 0.04)
 FAILFAST_MIN_PROGRESS = _env_float("FAILFAST_MIN_PROGRESS", 0.15)
@@ -646,8 +647,11 @@ class MuonAdamW(torch.optim.Optimizer):
             state = self.state[p]
             if not state:
                 state['step'] = 0
-                state['exp_avg'] = torch.zeros_like(p)
-                state['exp_avg_sq'] = torch.zeros_like(p)
+                if FP32_ADAM_STATE and p.dtype != torch.float32:
+                    state['master_param'] = p.detach().float().clone()
+                state_param = state.get('master_param', p)
+                state['exp_avg'] = torch.zeros_like(state_param)
+                state['exp_avg_sq'] = torch.zeros_like(state_param)
             state['step'] += 1
             self._adamw_step_t.fill_(state['step'])
             self._adamw_lr_t.fill_(group['lr'])
@@ -655,9 +659,13 @@ class MuonAdamW(torch.optim.Optimizer):
             self._adamw_beta2_t.fill_(group['betas'][1])
             self._adamw_eps_t.fill_(group['eps'])
             self._adamw_wd_t.fill_(group['weight_decay'])
-            adamw_step_fused(p, grad, state['exp_avg'], state['exp_avg_sq'],
+            update_param = state.get('master_param', p)
+            update_grad = grad.float() if update_param.dtype == torch.float32 else grad
+            adamw_step_fused(update_param, update_grad, state['exp_avg'], state['exp_avg_sq'],
                             self._adamw_step_t, self._adamw_lr_t, self._adamw_beta1_t,
                             self._adamw_beta2_t, self._adamw_eps_t, self._adamw_wd_t)
+            if update_param is not p:
+                p.copy_(update_param)
 
     def _step_muon(self, group):
         params = group['params']
@@ -746,6 +754,7 @@ autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=_amp_dtype)
 print(f"Experiment label: {EXPERIMENT_LABEL}", flush=True)
 print(f"Use value embeddings: {USE_VALUE_EMBEDS}", flush=True)
 print(f"Optimizer kind: {OPTIMIZER_KIND}", flush=True)
+print(f"FP32 Adam state/master weights: {FP32_ADAM_STATE}", flush=True)
 print(f"MLP kind: {MLP_KIND}", flush=True)
 print(f"Attention residual mode/backend/block: {ATTN_RESIDUAL_MODE}/{ATTN_RESIDUAL_BACKEND}/{ATTN_RESIDUAL_BLOCK_SIZE}", flush=True)
 print(f"flash-attn-res available: {HAS_FLASH_ATTN_RES}", flush=True)
@@ -777,6 +786,7 @@ emit_event(
     hparams=dict(
         use_value_embeds=USE_VALUE_EMBEDS,
         optimizer_kind=OPTIMIZER_KIND,
+        fp32_adam_state=FP32_ADAM_STATE,
         mlp_kind=MLP_KIND,
         aspect_ratio=ASPECT_RATIO,
         head_dim=HEAD_DIM,
@@ -1142,6 +1152,7 @@ emit_event(
     use_value_embeds=USE_VALUE_EMBEDS,
     window_pattern=WINDOW_PATTERN,
     optimizer_kind=OPTIMIZER_KIND,
+    fp32_adam_state=FP32_ADAM_STATE,
     mlp_kind=MLP_KIND,
     attn_residual_mode=ATTN_RESIDUAL_MODE,
     attn_residual_backend=ATTN_RESIDUAL_BACKEND,
@@ -1198,6 +1209,7 @@ if CHECKPOINT_IF_BEST and val_bpb < CHECKPOINT_BEST_VAL_BPB:
             "hparams": dict(
                 use_value_embeds=USE_VALUE_EMBEDS,
                 optimizer_kind=OPTIMIZER_KIND,
+                fp32_adam_state=FP32_ADAM_STATE,
                 mlp_kind=MLP_KIND,
                 uncounted_warmup_steps=UNCOUNTED_WARMUP_STEPS,
                 aspect_ratio=ASPECT_RATIO,

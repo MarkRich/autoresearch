@@ -39,6 +39,7 @@ BASE_ENV = {
     "USE_VALUE_EMBEDS": "1",
     "MLP_KIND": "relu_squared",
     "OPTIMIZER_KIND": "muon",
+    "FP32_ADAM_STATE": "0",
     "EMBEDDING_LR": "0.010",
     "UNEMBEDDING_LR": "0.002",
     "MATRIX_LR": "0.0020",
