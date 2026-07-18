@@ -38,6 +38,7 @@ class CampaignTests(unittest.TestCase):
     def test_fallback_campaign_only_uses_full_attention(self):
         self.assertEqual(campaign.BASE_ENV["OPENCLAW_FORCE_SDPA"], "1")
         self.assertEqual(campaign.BASE_ENV["WINDOW_PATTERN"], "LLLL")
+        self.assertEqual(campaign.BASE_ENV["AMP_DTYPE"], "bf16")
         self.assertEqual(campaign.BASE_ENV["GRAD_CLIP_NORM"], "0")
         self.assertEqual(campaign.BASE_ENV["MLP_KIND"], "relu_squared")
         self.assertEqual(campaign.BASE_ENV["UNCOUNTED_WARMUP_STEPS"], "0")
@@ -88,6 +89,12 @@ class CampaignTests(unittest.TestCase):
             plan = campaign.load_plan(path)
             self.assertEqual([lane.label for lane in plan[0]], ["batch8", "batch16"])
             self.assertEqual([lane.overrides["DEVICE_BATCH_SIZE"] for lane in plan[0]], ["8", "16"])
+
+    def test_resolved_lane_environment_includes_defaults_and_overrides(self):
+        resolved = campaign.resolved_lane_env({"DEVICE_BATCH_SIZE": "16", "AMP_DTYPE": "fp16"})
+        self.assertEqual(resolved["DEVICE_BATCH_SIZE"], "16")
+        self.assertEqual(resolved["AMP_DTYPE"], "fp16")
+        self.assertEqual(resolved["WINDOW_PATTERN"], "LLLL")
 
     def test_lane_plan_rejects_unknown_environment_keys(self):
         with tempfile.TemporaryDirectory() as tmp:

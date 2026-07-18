@@ -28,7 +28,7 @@ SEEDS = (101, 202)
 BASE_ENV = {
     "DEVICE_BATCH_SIZE": "2",
     "TOTAL_BATCH_SIZE": str(2**19),
-    "AMP_DTYPE": "fp16",
+    "AMP_DTYPE": "bf16",
     "OPENCLAW_FORCE_SDPA": "1",
     "OPENCLAW_DISABLE_TORCH_COMPILE": "1",
     "UNCOUNTED_WARMUP_STEPS": "0",
@@ -72,6 +72,11 @@ PLAN = (
 )
 
 ALLOWED_OVERRIDE_KEYS = frozenset(BASE_ENV)
+
+
+def resolved_lane_env(overrides: dict[str, str]) -> dict[str, str]:
+    """Return the exact non-secret training environment for a lane."""
+    return {**BASE_ENV, **overrides}
 
 
 @dataclass(frozen=True)
@@ -269,8 +274,7 @@ def launch_round(
         log_path = logs / f"{run_id}.log"
         metric_path = metrics / f"{run_id}.jsonl"
         env = os.environ.copy()
-        env.update(BASE_ENV)
-        env.update(overrides)
+        env.update(resolved_lane_env(overrides))
         env.update(dashboard)
         env.update({
             "CODEX_WORK_TAG": work_tag,
@@ -431,7 +435,10 @@ def main() -> int:
                 final = read_final(child.metric_path)
                 result = {
                     "round": round_number, "experiment": child.label, "gpu": child.gpu,
-                    "seed": child.seed, "env": child.overrides, "run_id": child.run_id,
+                    "seed": child.seed,
+                    "env": resolved_lane_env(child.overrides),
+                    "env_overrides": child.overrides,
+                    "run_id": child.run_id,
                     "returncode": returncode,
                     "status": "ok" if returncode == 0 and final else "failed",
                     "val_bpb": final.get("val_bpb") if final else None,

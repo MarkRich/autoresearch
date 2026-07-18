@@ -750,6 +750,7 @@ elif _amp_dtype_name in ("bf16", "bfloat16"):
     _amp_dtype = torch.bfloat16
 else:
     _amp_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+AMP_DTYPE_RESOLVED = str(_amp_dtype).removeprefix("torch.")
 autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=_amp_dtype)
 print(f"Experiment label: {EXPERIMENT_LABEL}", flush=True)
 print(f"Use value embeddings: {USE_VALUE_EMBEDS}", flush=True)
@@ -799,7 +800,7 @@ emit_event(
         warmup_ratio=WARMUP_RATIO,
         warmdown_ratio=WARMDOWN_RATIO,
         final_lr_frac=FINAL_LR_FRAC,
-        amp_dtype=str(_amp_dtype),
+        amp_dtype=AMP_DTYPE_RESOLVED,
         sanity_reuse_first_batch=SANITY_REUSE_FIRST_BATCH,
         failfast_random_margin=FAILFAST_RANDOM_MARGIN,
         failfast_min_progress=FAILFAST_MIN_PROGRESS,
@@ -1154,6 +1155,7 @@ emit_event(
     use_value_embeds=USE_VALUE_EMBEDS,
     window_pattern=WINDOW_PATTERN,
     optimizer_kind=OPTIMIZER_KIND,
+    amp_dtype=AMP_DTYPE_RESOLVED,
     fp32_adam_state=FP32_ADAM_STATE,
     mlp_kind=MLP_KIND,
     attn_residual_mode=ATTN_RESIDUAL_MODE,
@@ -1211,6 +1213,7 @@ if CHECKPOINT_IF_BEST and val_bpb < CHECKPOINT_BEST_VAL_BPB:
             "hparams": dict(
                 use_value_embeds=USE_VALUE_EMBEDS,
                 optimizer_kind=OPTIMIZER_KIND,
+                amp_dtype=AMP_DTYPE_RESOLVED,
                 fp32_adam_state=FP32_ADAM_STATE,
                 mlp_kind=MLP_KIND,
                 uncounted_warmup_steps=UNCOUNTED_WARMUP_STEPS,

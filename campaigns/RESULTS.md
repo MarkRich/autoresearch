@@ -51,6 +51,8 @@ useful check that the harness and validation path are repeatable.
 | same | 60 s | native state | 3.020228 | Control |
 | `codex-6h-swiglu-10m-20260718-060014` | 600 s | parameter-matched SwiGLU | 2.463151, 2.422131 | Mean 2.442641; reject |
 | same | 600 s | ReLU-squared | 2.434733, 2.443788 | Mean 2.439260; retain |
+| `codex-6h-amp-10m-20260718-062405` | 600 s | BF16 autocast | 2.009695, 1.995127 | Mean 2.002411; promote |
+| same | 600 s | FP16 autocast | 2.434835, 2.443807 | Mean 2.439321; reject |
 
 The budget-accounting fix produced 13 counted optimizer steps and roughly
 60-62 seconds of measured training per lane. Before the fix, eager experiments
@@ -68,6 +70,14 @@ trade. SwiGLU completed 133 steps (69.73M tokens) on thermally constrained GPU
 squared. Its 2.442641 paired mean was nevertheless 0.003381 worse than ReLU
 squared, and its 0.041020 spread was more than four times the control spread.
 SwiGLU remains a tested optional implementation but is not the incumbent.
+
+BF16 improved the paired mean by 0.436910 (17.9 percent relative), completed
+138 and 145 steps versus FP16's 128 and 123, and used about 884 MB less peak
+VRAM in both placements. The fixed-probe trajectories replicated closely and
+ended at their best values. FP16 gradients stayed extremely small through the
+early schedule before rising sharply; this unscaled mixed-precision loop was
+discarding useful signal. BF16's wider exponent range preserved it and is now
+the campaign default on this Ampere host.
 
 ## Promotion policy
 
