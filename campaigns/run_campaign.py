@@ -41,6 +41,7 @@ BASE_ENV = {
     "ATTN_RESIDUAL_MODE": "none",
     "ATTN_RESIDUAL_BACKEND": "package",
     "ATTN_RESIDUAL_BLOCK_SIZE": "4",
+    "ATTN_OUTPUT_GATE": "none",
     "OPTIMIZER_KIND": "muon",
     "FP32_ADAM_STATE": "0",
     "EMBEDDING_LR": "0.010",

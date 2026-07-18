@@ -44,6 +44,7 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(campaign.BASE_ENV["UNCOUNTED_WARMUP_STEPS"], "0")
         self.assertEqual(campaign.BASE_ENV["FP32_ADAM_STATE"], "0")
         self.assertEqual(campaign.BASE_ENV["ATTN_RESIDUAL_MODE"], "none")
+        self.assertEqual(campaign.BASE_ENV["ATTN_OUTPUT_GATE"], "none")
         self.assertEqual(campaign.BASE_ENV["FAILFAST_REGRESSION_MIN_RISE"], "0.50")
         self.assertEqual(campaign.BASE_ENV["FAILFAST_REGRESSION_PATIENCE_EVENTS"], "3")
 

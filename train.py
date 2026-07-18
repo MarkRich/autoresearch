@@ -94,6 +94,11 @@ FAILFAST_REGRESSION_PATIENCE_EVENTS = _env_int("FAILFAST_REGRESSION_PATIENCE_EVE
 ATTN_RESIDUAL_MODE = os.environ.get("ATTN_RESIDUAL_MODE", "none").strip().lower()
 ATTN_RESIDUAL_BACKEND = os.environ.get("ATTN_RESIDUAL_BACKEND", "package").strip().lower()
 ATTN_RESIDUAL_BLOCK_SIZE = _env_int("ATTN_RESIDUAL_BLOCK_SIZE", 4)
+ATTN_OUTPUT_GATE = os.environ.get("ATTN_OUTPUT_GATE", "none").strip().lower()
+if ATTN_OUTPUT_GATE not in ("none", "headwise"):
+    raise ValueError(
+        f"Unknown ATTN_OUTPUT_GATE={ATTN_OUTPUT_GATE!r}; expected 'none' or 'headwise'"
+    )
 
 # ---------------------------------------------------------------------------
 # Lightweight run telemetry
@@ -207,7 +212,8 @@ class CausalSelfAttention(nn.Module):
         self.head_dim = self.n_embd // self.n_head
         assert self.n_embd % self.n_head == 0
         assert self.n_kv_head <= self.n_head and self.n_head % self.n_kv_head == 0
-        self.c_q = nn.Linear(self.n_embd, self.n_head * self.head_dim, bias=False)
+        q_width = self.head_dim + (1 if ATTN_OUTPUT_GATE == "headwise" else 0)
+        self.c_q = nn.Linear(self.n_embd, self.n_head * q_width, bias=False)
         self.c_k = nn.Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_v = nn.Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_proj = nn.Linear(self.n_embd, self.n_embd, bias=False)
@@ -216,7 +222,11 @@ class CausalSelfAttention(nn.Module):
 
     def forward(self, x, ve, cos_sin, window_size):
         B, T, C = x.size()
-        q = self.c_q(x).view(B, T, self.n_head, self.head_dim)
+        q = self.c_q(x).view(B, T, self.n_head, -1)
+        if ATTN_OUTPUT_GATE == "headwise":
+            q, gate_score = q.split((self.head_dim, 1), dim=-1)
+        else:
+            gate_score = None
         k = self.c_k(x).view(B, T, self.n_kv_head, self.head_dim)
         v = self.c_v(x).view(B, T, self.n_kv_head, self.head_dim)
 
@@ -245,6 +255,10 @@ class CausalSelfAttention(nn.Module):
             v_sdpa = v.transpose(1, 2)
             y = F.scaled_dot_product_attention(q_sdpa, k_sdpa, v_sdpa, is_causal=True)
             y = y.transpose(1, 2)
+        if gate_score is not None:
+            # G1 from Qiu et al.: a query-dependent sigmoid scalar gates each
+            # attention head after SDPA and before the output projection.
+            y = y * torch.sigmoid(gate_score)
         y = y.contiguous().view(B, T, -1)
         y = self.c_proj(y)
         return y
@@ -758,6 +772,7 @@ print(f"Optimizer kind: {OPTIMIZER_KIND}", flush=True)
 print(f"FP32 Adam state/master weights: {FP32_ADAM_STATE}", flush=True)
 print(f"MLP kind: {MLP_KIND}", flush=True)
 print(f"Attention residual mode/backend/block: {ATTN_RESIDUAL_MODE}/{ATTN_RESIDUAL_BACKEND}/{ATTN_RESIDUAL_BLOCK_SIZE}", flush=True)
+print(f"Attention output gate: {ATTN_OUTPUT_GATE}", flush=True)
 print(f"flash-attn-res available: {HAS_FLASH_ATTN_RES}", flush=True)
 print(f"AMP dtype: {_amp_dtype}", flush=True)
 REFERENCE_PEAK_FLOPS = _env_float("REFERENCE_PEAK_FLOPS", 71.0e12)
@@ -811,6 +826,7 @@ emit_event(
         attn_residual_mode=ATTN_RESIDUAL_MODE,
         attn_residual_backend=ATTN_RESIDUAL_BACKEND,
         attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
+        attn_output_gate=ATTN_OUTPUT_GATE,
     ),
     time_budget_seconds=TIME_BUDGET,
     max_seq_len=MAX_SEQ_LEN,
@@ -1161,6 +1177,7 @@ emit_event(
     attn_residual_mode=ATTN_RESIDUAL_MODE,
     attn_residual_backend=ATTN_RESIDUAL_BACKEND,
     attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
+    attn_output_gate=ATTN_OUTPUT_GATE,
 )
 
 
@@ -1234,6 +1251,7 @@ if CHECKPOINT_IF_BEST and val_bpb < CHECKPOINT_BEST_VAL_BPB:
                 attn_residual_mode=ATTN_RESIDUAL_MODE,
                 attn_residual_backend=ATTN_RESIDUAL_BACKEND,
                 attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
+                attn_output_gate=ATTN_OUTPUT_GATE,
             ),
             "state_dict": base_model.state_dict(),
         },

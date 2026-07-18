@@ -39,8 +39,9 @@ The campaign is a funnel rather than an open-ended random search:
 5. **Paper-inspired architecture:** test parameter-matched SwiGLU from
    [GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202), value
    residuals from [ResFormer](https://arxiv.org/abs/2410.17897), and blockwise
-   [Attention Residuals](https://arxiv.org/abs/2603.15031) only on the stable
-   optimizer recipe.
+   [Attention Residuals](https://arxiv.org/abs/2603.15031), plus headwise output
+   gating from [Gated Attention for Large Language Models](https://arxiv.org/abs/2505.06708),
+   only on the stable optimizer recipe.
 6. **Numerical efficiency:** compare FP16 with BF16 using the same stable
    recipe, motivated by BF16's FP32-like exponent range in
    [A Study of BFLOAT16 for Deep Learning Training](https://arxiv.org/abs/1905.12322).
