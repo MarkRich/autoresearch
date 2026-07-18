@@ -906,6 +906,8 @@ def model_diagnostics():
         "lm_head_rms": float(lm_head.square().mean().sqrt().item()),
         "resid_lambda_abs_max": float(model.resid_lambdas.abs().max().item()),
         "x0_lambda_abs_max": float(model.x0_lambdas.abs().max().item()),
+        "x0_lambda_min": float(model.x0_lambdas.min().item()),
+        "x0_lambda_max": float(model.x0_lambdas.max().item()),
     }
 
 # Schedules (all based on progress = training_time / TIME_BUDGET)
