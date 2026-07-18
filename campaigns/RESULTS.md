@@ -17,6 +17,8 @@ code path is safe enough to measure.
 | same | 180 s | device batch 16 | 2.518949, 2.472028 | 2.495488 | Reject; worse mean and more VRAM |
 | `codex-6h-lrscale-10m-20260718-050849` | 600 s | half learning rates | 3.009350, 3.037510 | 3.023430 | Reject; repeatable late collapse |
 | same | 600 s | quarter learning rates | 2.434727, 2.443874 | 2.439300 | Stable incumbent |
+| `codex-6h-hybrid-10m-20260718-053618` | 600 s | fast body, stable head/scalars | 2.608312, 2.655714 | 2.632013 | Reject; early gain reverses late |
+| same | 600 s | quarter learning rates | 2.434815, 2.443969 | 2.439392 | Retain stable incumbent |
 
 Batch 8 used about 7.6 GB per lane, while batch 16 used about 14.5 GB. The
 crossover is necessary because GPU 0 enters firmware thermal slowdown and is
@@ -28,6 +30,14 @@ toward random loss in both assignments. Its output-head RMS grew roughly twice
 as large as the quarter-rate recipe and its learned input-residual coefficient
 crossed zero. A single best checkpoint or a single short run would therefore
 have promoted the wrong configuration.
+
+The targeted hybrid held output-head and scalar learning rates at the stable
+values while doubling only embedding and matrix rates. It reproduced the same
+misleading shape in both crossover placements: a substantially better probe
+near the middle of training followed by regression during cooldown. Its paired
+mean was 0.192621 worse than the stable control. The control mean differed by
+only 0.000092 between the two independent 10-minute campaigns, which is a
+useful check that the harness and validation path are repeatable.
 
 ## Correctness and paper-inspired smoke tests
 
