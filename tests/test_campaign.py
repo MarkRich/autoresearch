@@ -131,6 +131,14 @@ class CampaignTests(unittest.TestCase):
         self.assertTrue(by_name["stable"]["promotion_eligible"])
         self.assertFalse(by_name["smoke"]["promotion_eligible"])
 
+    def test_campaign_summary_accepts_campaign_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "state.json"
+            state.write_text("{}", encoding="utf-8")
+            self.assertEqual(summary.resolve_state_path(root), state)
+            self.assertEqual(summary.resolve_state_path(state), state)
+
     def test_launch_round_uses_campaign_specific_work_tag(self):
         lane = campaign.LaneSpec(gpu=0, seed=101, label="control", overrides={})
         fake_process = mock.Mock(pid=1234)

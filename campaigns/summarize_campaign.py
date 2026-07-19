@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any
 
 
+def resolve_state_path(path: Path) -> Path:
+    """Accept either a campaign directory or its explicit state file."""
+    return path / "state.json" if path.is_dir() else path
+
+
 def summarize_runs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for run in runs:
@@ -41,7 +46,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("state", type=Path)
     args = parser.parse_args()
-    state = json.loads(args.state.read_text(encoding="utf-8"))
+    state_path = resolve_state_path(args.state)
+    state = json.loads(state_path.read_text(encoding="utf-8"))
     rows = summarize_runs(state.get("runs", []))
     print("experiment\tn\tpromotion_eligible\tmean_val_bpb\tspread\tscores")
     for row in rows:

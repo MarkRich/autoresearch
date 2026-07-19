@@ -49,10 +49,12 @@ The campaign is a funnel rather than an open-ended random search:
    survivor and its stable control.
 
 BF16 is the current numerical incumbent after a placement-swapped 10-minute
-crossover. Before committing an hour to one recipe, compare its quarter-scale
-learning rates with an eighth-scale alternative over 30 minutes per lane. This
-longer horizon tests whether the faster BF16 learning signal needs a lower peak
-rate to preserve late-run stability.
+crossover. A compiled 30-minute crossover then showed that quarter-scale
+learning rates beat eighth-scale rates by 0.199436 validation BPB (11.4 percent
+relative), with stable fixed-probe trajectories in both placements. Before the
+final hour, refine upward once at 1.25 times quarter-scale rates: this remains
+well below the rejected 2-times recipe while testing whether the stable long
+run left optimization speed on the table.
 
 Compiled execution is the current host-level incumbent after a replicated
 10-minute crossover. Long runs use 11 explicit zero-learning-rate compiler

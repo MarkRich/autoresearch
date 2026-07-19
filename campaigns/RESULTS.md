@@ -19,6 +19,8 @@ code path is safe enough to measure.
 | same | 600 s | quarter learning rates | 2.434727, 2.443874 | 2.439300 | Stable incumbent |
 | `codex-6h-hybrid-10m-20260718-053618` | 600 s | fast body, stable head/scalars | 2.608312, 2.655714 | 2.632013 | Reject; early gain reverses late |
 | same | 600 s | quarter learning rates | 2.434815, 2.443969 | 2.439392 | Retain stable incumbent |
+| `codex-6h-bf16-lr-30m-20260719-080020` | 1,800 s | quarter learning rates | 1.560549, 1.537927 | 1.549238 | Promote for fine search |
+| same | 1,800 s | eighth learning rates | 1.733231, 1.764117 | 1.748674 | Reject; under-trains at long budget |
 
 Batch 8 used about 7.6 GB per lane, while batch 16 used about 14.5 GB. The
 crossover is necessary because GPU 0 enters firmware thermal slowdown and is
@@ -38,6 +40,14 @@ near the middle of training followed by regression during cooldown. Its paired
 mean was 0.192621 worse than the stable control. The control mean differed by
 only 0.000092 between the two independent 10-minute campaigns, which is a
 useful check that the harness and validation path are repeatable.
+
+The compiled BF16 30-minute crossover promoted quarter-scale learning rates by
+0.199436 BPB (11.4 percent relative) over eighth-scale rates. Quarter-scale won
+on both GPU/seed placements, and its fixed-probe trajectory ended at its best
+value with zero regression events through the full cooldown. The eighth-scale
+recipe was stable but plainly under-trained at the fixed wall-clock budget.
+Because quarter-scale retained a wide stable margin, the next refinement tests
+1.25 times its rates rather than spending another long run below it.
 
 ## Correctness and paper-inspired smoke tests
 
