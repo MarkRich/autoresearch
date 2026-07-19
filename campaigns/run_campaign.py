@@ -61,6 +61,15 @@ BASE_ENV = {
     "FAILFAST_MIN_PROGRESS": "2.0",
     "FAILFAST_REGRESSION_MIN_RISE": "0.50",
     "FAILFAST_REGRESSION_PATIENCE_EVENTS": "3",
+    # Final confirmation plans can opt into a reproducible checkpoint and
+    # deterministic sample without trusting ambient shell state.
+    "OPENCLAW_CHECKPOINT_IF_BEST": "0",
+    "OPENCLAW_BEST_VAL_BPB": "inf",
+    "OPENCLAW_CHECKPOINT_DIR": "checkpoints",
+    "OPENCLAW_SAMPLE_PROMPT": "Once upon a time",
+    "OPENCLAW_SAMPLE_TOKENS": "160",
+    "OPENCLAW_SAMPLE_TEMPERATURE": "0.8",
+    "OPENCLAW_SAMPLE_TOP_K": "50",
 }
 
 PLAN = (
