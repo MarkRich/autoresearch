@@ -23,6 +23,7 @@ code path is safe enough to measure.
 | same | 1,800 s | eighth learning rates | 1.733231, 1.764117 | 1.748674 | Reject; under-trains at long budget |
 | `codex-6h-bf16-fine-lr-30m-20260719-091240` | 1,800 s | 1.25 x quarter rates | 1.491551, 1.506759 | 1.499155 | Promote to final hour |
 | same | 1,800 s | quarter learning rates | 1.559841, 1.537528 | 1.548684 | Stable control |
+| `codex-6h-final-1h-20260719-101826` | 3,600 s | final 1.25 x recipe | 1.282301, 1.280723 | 1.281512 | Stable final checkpoints |
 
 Batch 8 used about 7.6 GB per lane, while batch 16 used about 14.5 GB. The
 crossover is necessary because GPU 0 enters firmware thermal slowdown and is
@@ -55,6 +56,12 @@ The upward refinement improved the paired mean by another 0.049529 BPB (3.2
 percent relative). It won both GPU/seed placements, reduced the replicate
 spread from 0.022313 to 0.015209, and completed both cooldowns with zero fixed-
 probe regression events. The 1.25-times recipe is the final one-hour choice.
+
+The final independent one-hour replicas completed 1,300 and 1,381 counted
+steps, processed 681.574M and 724.042M tokens, and used 3,182.83 MB peak
+allocated VRAM per lane. Their 0.001578 BPB spread is much smaller than the
+preceding crossover spreads. Both reloadable checkpoints and generated samples
+are recorded in [`FINAL_ARTIFACTS.md`](FINAL_ARTIFACTS.md).
 
 ## Correctness and paper-inspired smoke tests
 
