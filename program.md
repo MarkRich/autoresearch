@@ -54,6 +54,10 @@ learning rates with an eighth-scale alternative over 30 minutes per lane. This
 longer horizon tests whether the faster BF16 learning signal needs a lower peak
 rate to preserve late-run stability.
 
+Compiled execution is the current host-level incumbent after a replicated
+10-minute crossover. Long runs use 11 explicit zero-learning-rate compiler
+warm-up steps and exclude only those steps from the measured training budget.
+
 Mixed-precision master weights are available as a diagnostic based on
 [Mixed Precision Training](https://arxiv.org/abs/1710.03740), but are not
 promoted merely because they are theoretically safer; they must improve the

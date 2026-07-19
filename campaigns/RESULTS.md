@@ -61,6 +61,8 @@ useful check that the harness and validation path are repeatable.
 | same | 600 s | standard attention | 1.989243, 2.001488 | Mean 1.995366; retain |
 | `codex-6h-attnres-smoke-20260719-073237` | 60 s | blockwise Attention Residuals | 3.158942 | Reject; 8 steps, 3.03 GB |
 | same | 60 s | standard residuals | 3.057921 | Retain; 16 steps, 6.03 GB |
+| `codex-6h-compile-10m-20260719-073510` | 600 s | compiled batch 8 | 1.901548, 1.888342 | Mean 1.894945; promote |
+| same | 600 s | eager batch 8 | 1.988884, 2.003031 | Mean 1.995957; reject |
 
 The budget-accounting fix produced 13 counted optimizer steps and roughly
 60-62 seconds of measured training per lane. Before the fix, eager experiments
@@ -108,6 +110,13 @@ half. On these RTX 3090 lanes it stabilized near 100k tokens/s versus 130k for
 standard residuals, completed only 8 versus 16 counted smoke steps, and scored
 0.101020 worse. That efficiency gap makes a long crossover ineligible under
 the fixed wall-clock objective.
+
+Compiled execution improved the paired mean by 0.101013 (5.1 percent),
+completed 216 and 231 counted steps versus eager's 148 and 141, and reduced
+peak allocated VRAM from 6.03 GB to 3.18 GB in both placements. The 11
+compiler warm-up steps are declared explicitly, run at zero learning rate, and
+are excluded from the 600-second training clock. Compilation is now the
+default for long confirmation runs on this host.
 
 ## Promotion policy
 
