@@ -18,6 +18,8 @@ import urllib.request
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
+from autoresearch_utils import attention_window_covers_sequence
+
 import torch
 if os.environ.get("OPENCLAW_DISABLE_TORCH_COMPILE") == "1":
     def _torch_compile(fn=None, **_kwargs):
@@ -79,17 +81,26 @@ def _env_int(name, default):
 EXPERIMENT_LABEL = os.environ.get("EXPERIMENT_LABEL", "baseline")
 USE_VALUE_EMBEDS = _env_bool("USE_VALUE_EMBEDS", True)
 OPTIMIZER_KIND = os.environ.get("OPTIMIZER_KIND", "muon").strip().lower()
+MLP_KIND = os.environ.get("MLP_KIND", "relu_squared").strip().lower()
+FP32_ADAM_STATE = _env_bool("FP32_ADAM_STATE", False)
 SANITY_REUSE_FIRST_BATCH = _env_bool("SANITY_REUSE_FIRST_BATCH", False)
 FAILFAST_RANDOM_MARGIN = _env_float("FAILFAST_RANDOM_MARGIN", 0.04)
 FAILFAST_MIN_PROGRESS = _env_float("FAILFAST_MIN_PROGRESS", 0.15)
 FAILFAST_MIN_STEPS = _env_int("FAILFAST_MIN_STEPS", 80)
 TRAIN_PROBE_BATCHES = _env_int("TRAIN_PROBE_BATCHES", 4)
+GRAD_CLIP_NORM = _env_float("GRAD_CLIP_NORM", 0.0)
+UNCOUNTED_WARMUP_STEPS = _env_int("UNCOUNTED_WARMUP_STEPS", 0)
 FAILFAST_REGRESSION_MIN_STEPS = _env_int("FAILFAST_REGRESSION_MIN_STEPS", 40)
 FAILFAST_REGRESSION_MIN_RISE = _env_float("FAILFAST_REGRESSION_MIN_RISE", 0.35)
 FAILFAST_REGRESSION_PATIENCE_EVENTS = _env_int("FAILFAST_REGRESSION_PATIENCE_EVENTS", 3)
 ATTN_RESIDUAL_MODE = os.environ.get("ATTN_RESIDUAL_MODE", "none").strip().lower()
 ATTN_RESIDUAL_BACKEND = os.environ.get("ATTN_RESIDUAL_BACKEND", "package").strip().lower()
 ATTN_RESIDUAL_BLOCK_SIZE = _env_int("ATTN_RESIDUAL_BLOCK_SIZE", 4)
+ATTN_OUTPUT_GATE = os.environ.get("ATTN_OUTPUT_GATE", "none").strip().lower()
+if ATTN_OUTPUT_GATE not in ("none", "headwise"):
+    raise ValueError(
+        f"Unknown ATTN_OUTPUT_GATE={ATTN_OUTPUT_GATE!r}; expected 'none' or 'headwise'"
+    )
 
 # ---------------------------------------------------------------------------
 # Lightweight run telemetry
@@ -203,7 +214,8 @@ class CausalSelfAttention(nn.Module):
         self.head_dim = self.n_embd // self.n_head
         assert self.n_embd % self.n_head == 0
         assert self.n_kv_head <= self.n_head and self.n_head % self.n_kv_head == 0
-        self.c_q = nn.Linear(self.n_embd, self.n_head * self.head_dim, bias=False)
+        q_width = self.head_dim + (1 if ATTN_OUTPUT_GATE == "headwise" else 0)
+        self.c_q = nn.Linear(self.n_embd, self.n_head * q_width, bias=False)
         self.c_k = nn.Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_v = nn.Linear(self.n_embd, self.n_kv_head * self.head_dim, bias=False)
         self.c_proj = nn.Linear(self.n_embd, self.n_embd, bias=False)
@@ -212,7 +224,11 @@ class CausalSelfAttention(nn.Module):
 
     def forward(self, x, ve, cos_sin, window_size):
         B, T, C = x.size()
-        q = self.c_q(x).view(B, T, self.n_head, self.head_dim)
+        q = self.c_q(x).view(B, T, self.n_head, -1)
+        if ATTN_OUTPUT_GATE == "headwise":
+            q, gate_score = q.split((self.head_dim, 1), dim=-1)
+        else:
+            gate_score = None
         k = self.c_k(x).view(B, T, self.n_kv_head, self.head_dim)
         v = self.c_v(x).view(B, T, self.n_kv_head, self.head_dim)
 
@@ -231,7 +247,7 @@ class CausalSelfAttention(nn.Module):
         else:
             # PyTorch SDPA can select flash attention on Ampere, but it cannot
             # honor the FA3-only sliding-window hint. Refuse that fake comparison.
-            if window_size[0] != T:
+            if not attention_window_covers_sequence(window_size, T):
                 raise RuntimeError(
                     "Sliding-window attention requires FA3; use "
                     "WINDOW_PATTERN=LLLL with the PyTorch SDPA fallback."
@@ -241,6 +257,10 @@ class CausalSelfAttention(nn.Module):
             v_sdpa = v.transpose(1, 2)
             y = F.scaled_dot_product_attention(q_sdpa, k_sdpa, v_sdpa, is_causal=True)
             y = y.transpose(1, 2)
+        if gate_score is not None:
+            # G1 from Qiu et al.: a query-dependent sigmoid scalar gates each
+            # attention head after SDPA and before the output projection.
+            y = y * torch.sigmoid(gate_score)
         y = y.contiguous().view(B, T, -1)
         y = self.c_proj(y)
         return y
@@ -249,12 +269,27 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
+        if MLP_KIND == "swiglu":
+            # A parameter-matched SwiGLU FFN uses roughly 8d/3 hidden units.
+            # Round to an Ampere-friendly multiple without materially changing
+            # the parameter budget relative to the 4d ReLU-squared baseline.
+            self.hidden_dim = 128 * round((8 * config.n_embd / 3) / 128)
+            self.c_fc = nn.Linear(config.n_embd, 2 * self.hidden_dim, bias=False)
+            self.c_proj = nn.Linear(self.hidden_dim, config.n_embd, bias=False)
+        elif MLP_KIND == "relu_squared":
+            self.hidden_dim = 4 * config.n_embd
+            self.c_fc = nn.Linear(config.n_embd, self.hidden_dim, bias=False)
+            self.c_proj = nn.Linear(self.hidden_dim, config.n_embd, bias=False)
+        else:
+            raise ValueError(f"Unknown MLP_KIND={MLP_KIND!r}; expected 'relu_squared' or 'swiglu'")
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = F.relu(x).square()
+        if MLP_KIND == "swiglu":
+            gate, value = x.chunk(2, dim=-1)
+            x = F.silu(gate) * value
+        else:
+            x = F.relu(x).square()
         x = self.c_proj(x)
         return x
 
@@ -628,8 +663,11 @@ class MuonAdamW(torch.optim.Optimizer):
             state = self.state[p]
             if not state:
                 state['step'] = 0
-                state['exp_avg'] = torch.zeros_like(p)
-                state['exp_avg_sq'] = torch.zeros_like(p)
+                if FP32_ADAM_STATE and p.dtype != torch.float32:
+                    state['master_param'] = p.detach().float().clone()
+                state_param = state.get('master_param', p)
+                state['exp_avg'] = torch.zeros_like(state_param)
+                state['exp_avg_sq'] = torch.zeros_like(state_param)
             state['step'] += 1
             self._adamw_step_t.fill_(state['step'])
             self._adamw_lr_t.fill_(group['lr'])
@@ -637,9 +675,13 @@ class MuonAdamW(torch.optim.Optimizer):
             self._adamw_beta2_t.fill_(group['betas'][1])
             self._adamw_eps_t.fill_(group['eps'])
             self._adamw_wd_t.fill_(group['weight_decay'])
-            adamw_step_fused(p, grad, state['exp_avg'], state['exp_avg_sq'],
+            update_param = state.get('master_param', p)
+            update_grad = grad.float() if update_param.dtype == torch.float32 else grad
+            adamw_step_fused(update_param, update_grad, state['exp_avg'], state['exp_avg_sq'],
                             self._adamw_step_t, self._adamw_lr_t, self._adamw_beta1_t,
                             self._adamw_beta2_t, self._adamw_eps_t, self._adamw_wd_t)
+            if update_param is not p:
+                p.copy_(update_param)
 
     def _step_muon(self, group):
         params = group['params']
@@ -724,11 +766,15 @@ elif _amp_dtype_name in ("bf16", "bfloat16"):
     _amp_dtype = torch.bfloat16
 else:
     _amp_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+AMP_DTYPE_RESOLVED = str(_amp_dtype).removeprefix("torch.")
 autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=_amp_dtype)
 print(f"Experiment label: {EXPERIMENT_LABEL}", flush=True)
 print(f"Use value embeddings: {USE_VALUE_EMBEDS}", flush=True)
 print(f"Optimizer kind: {OPTIMIZER_KIND}", flush=True)
+print(f"FP32 Adam state/master weights: {FP32_ADAM_STATE}", flush=True)
+print(f"MLP kind: {MLP_KIND}", flush=True)
 print(f"Attention residual mode/backend/block: {ATTN_RESIDUAL_MODE}/{ATTN_RESIDUAL_BACKEND}/{ATTN_RESIDUAL_BLOCK_SIZE}", flush=True)
+print(f"Attention output gate: {ATTN_OUTPUT_GATE}", flush=True)
 print(f"flash-attn-res available: {HAS_FLASH_ATTN_RES}", flush=True)
 print(f"AMP dtype: {_amp_dtype}", flush=True)
 REFERENCE_PEAK_FLOPS = _env_float("REFERENCE_PEAK_FLOPS", 71.0e12)
@@ -758,6 +804,8 @@ emit_event(
     hparams=dict(
         use_value_embeds=USE_VALUE_EMBEDS,
         optimizer_kind=OPTIMIZER_KIND,
+        fp32_adam_state=FP32_ADAM_STATE,
+        mlp_kind=MLP_KIND,
         aspect_ratio=ASPECT_RATIO,
         head_dim=HEAD_DIM,
         embedding_lr=EMBEDDING_LR,
@@ -769,15 +817,18 @@ emit_event(
         warmup_ratio=WARMUP_RATIO,
         warmdown_ratio=WARMDOWN_RATIO,
         final_lr_frac=FINAL_LR_FRAC,
-        amp_dtype=str(_amp_dtype),
+        amp_dtype=AMP_DTYPE_RESOLVED,
         sanity_reuse_first_batch=SANITY_REUSE_FIRST_BATCH,
         failfast_random_margin=FAILFAST_RANDOM_MARGIN,
         failfast_min_progress=FAILFAST_MIN_PROGRESS,
         failfast_min_steps=FAILFAST_MIN_STEPS,
         train_probe_batches=TRAIN_PROBE_BATCHES,
+        grad_clip_norm=GRAD_CLIP_NORM,
+        uncounted_warmup_steps=UNCOUNTED_WARMUP_STEPS,
         attn_residual_mode=ATTN_RESIDUAL_MODE,
         attn_residual_backend=ATTN_RESIDUAL_BACKEND,
         attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
+        attn_output_gate=ATTN_OUTPUT_GATE,
     ),
     time_budget_seconds=TIME_BUDGET,
     max_seq_len=MAX_SEQ_LEN,
@@ -842,6 +893,8 @@ print(f"Time budget: {TIME_BUDGET}s")
 print(f"Gradient accumulation steps: {grad_accum_steps}")
 print(f"Random-loss baseline ln(vocab): {math.log(vocab_size):.6f}; fail-fast margin: {FAILFAST_RANDOM_MARGIN:.3f}")
 print(f"Fixed train probe batches: {len(train_probe_batches)}")
+print(f"Gradient clipping: {GRAD_CLIP_NORM if GRAD_CLIP_NORM > 0 else 'disabled'}")
+print(f"Uncounted compiler warm-up steps: {UNCOUNTED_WARMUP_STEPS}")
 print(
     "Fixed-probe regression fail-fast: "
     f"rise>{FAILFAST_REGRESSION_MIN_RISE:.3f} after step {FAILFAST_REGRESSION_MIN_STEPS} "
@@ -860,6 +913,21 @@ def evaluate_train_probe_loss():
     if was_training:
         model.train()
     return sum(losses) / max(1, len(losses))
+
+
+@torch.no_grad()
+def model_diagnostics():
+    """Small, stable signals that make optimizer collapse diagnosable."""
+    wte = model.transformer.wte.weight.float()
+    lm_head = model.lm_head.weight.float()
+    return {
+        "wte_rms": float(wte.square().mean().sqrt().item()),
+        "lm_head_rms": float(lm_head.square().mean().sqrt().item()),
+        "resid_lambda_abs_max": float(model.resid_lambdas.abs().max().item()),
+        "x0_lambda_abs_max": float(model.x0_lambdas.abs().max().item()),
+        "x0_lambda_min": float(model.x0_lambdas.min().item()),
+        "x0_lambda_max": float(model.x0_lambdas.max().item()),
+    }
 
 # Schedules (all based on progress = training_time / TIME_BUDGET)
 
@@ -906,6 +974,12 @@ while True:
         if not SANITY_REUSE_FIRST_BATCH:
             x, y, epoch = next(train_loader)
 
+    capture_grad_norm = GRAD_CLIP_NORM > 0 or step == 0 or time.time() - last_emit_time >= 15
+    grad_norm = None
+    if capture_grad_norm:
+        max_norm = GRAD_CLIP_NORM if GRAD_CLIP_NORM > 0 else float("inf")
+        grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm).item())
+
     # Progress and schedules
     progress = min(total_training_time / TIME_BUDGET, 1.0)
     lrm = get_lr_multiplier(progress)
@@ -930,7 +1004,7 @@ while True:
     t1 = time.time()
     dt = t1 - t0
 
-    if step > 10:
+    if step >= UNCOUNTED_WARMUP_STEPS:
         total_training_time += dt
 
     # Logging
@@ -1033,6 +1107,8 @@ while True:
             step_seconds=dt,
             tokens_per_second=tok_per_sec,
             mfu_percent=mfu,
+            grad_norm=grad_norm,
+            model_diagnostics=model_diagnostics(),
             epoch=epoch,
             remaining_seconds=remaining,
             total_training_seconds=total_training_time,
@@ -1049,13 +1125,15 @@ while True:
 
     step += 1
 
-    # Time's up — but only stop after warmup steps so we don't count compilation
-    if step > 10 and total_training_time >= TIME_BUDGET:
+    # Time's up. Compiler-only warm-up steps can be excluded explicitly, while
+    # eager runs count useful work from the first step.
+    if step > UNCOUNTED_WARMUP_STEPS and total_training_time >= TIME_BUDGET:
         break
 
 print()  # newline after \r training log
 
-total_tokens = step * TOTAL_BATCH_SIZE
+counted_steps = max(0, step - UNCOUNTED_WARMUP_STEPS)
+total_tokens = counted_steps * TOTAL_BATCH_SIZE
 
 # Final eval
 model.eval()
@@ -1065,7 +1143,7 @@ with autocast_ctx:
 # Final summary
 t_end = time.time()
 startup_time = t_start_training - t_start
-steady_state_mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE * (step - 10) / total_training_time / REFERENCE_PEAK_FLOPS if total_training_time > 0 else 0
+steady_state_mfu = 100 * num_flops_per_token * TOTAL_BATCH_SIZE * counted_steps / total_training_time / REFERENCE_PEAK_FLOPS if total_training_time > 0 else 0
 peak_vram_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
 
 print("---")
@@ -1088,15 +1166,20 @@ emit_event(
     mfu_percent=steady_state_mfu,
     total_tokens_m=total_tokens / 1e6,
     num_steps=step,
+    counted_steps=counted_steps,
     num_params_m=num_params / 1e6,
     depth=DEPTH,
     experiment_label=EXPERIMENT_LABEL,
     use_value_embeds=USE_VALUE_EMBEDS,
     window_pattern=WINDOW_PATTERN,
     optimizer_kind=OPTIMIZER_KIND,
+    amp_dtype=AMP_DTYPE_RESOLVED,
+    fp32_adam_state=FP32_ADAM_STATE,
+    mlp_kind=MLP_KIND,
     attn_residual_mode=ATTN_RESIDUAL_MODE,
     attn_residual_backend=ATTN_RESIDUAL_BACKEND,
     attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
+    attn_output_gate=ATTN_OUTPUT_GATE,
 )
 
 
@@ -1149,6 +1232,10 @@ if CHECKPOINT_IF_BEST and val_bpb < CHECKPOINT_BEST_VAL_BPB:
             "hparams": dict(
                 use_value_embeds=USE_VALUE_EMBEDS,
                 optimizer_kind=OPTIMIZER_KIND,
+                amp_dtype=AMP_DTYPE_RESOLVED,
+                fp32_adam_state=FP32_ADAM_STATE,
+                mlp_kind=MLP_KIND,
+                uncounted_warmup_steps=UNCOUNTED_WARMUP_STEPS,
                 aspect_ratio=ASPECT_RATIO,
                 head_dim=HEAD_DIM,
                 embedding_lr=EMBEDDING_LR,
@@ -1166,6 +1253,7 @@ if CHECKPOINT_IF_BEST and val_bpb < CHECKPOINT_BEST_VAL_BPB:
                 attn_residual_mode=ATTN_RESIDUAL_MODE,
                 attn_residual_backend=ATTN_RESIDUAL_BACKEND,
                 attn_residual_block_size=ATTN_RESIDUAL_BLOCK_SIZE,
+                attn_output_gate=ATTN_OUTPUT_GATE,
             ),
             "state_dict": base_model.state_dict(),
         },

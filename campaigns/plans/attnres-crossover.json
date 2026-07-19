@@ -1,0 +1,66 @@
+{
+  "rounds": [
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "attnres_block4",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
+            "USE_VALUE_EMBEDS": "0",
+            "ATTN_RESIDUAL_MODE": "block",
+            "ATTN_RESIDUAL_BACKEND": "package",
+            "ATTN_RESIDUAL_BLOCK_SIZE": "4"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "standard_residual",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
+            "USE_VALUE_EMBEDS": "0"
+          }
+        }
+      ]
+    },
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "standard_residual",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
+            "USE_VALUE_EMBEDS": "0"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "attnres_block4",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.0025",
+            "UNEMBEDDING_LR": "0.0005",
+            "MATRIX_LR": "0.0005",
+            "SCALAR_LR": "0.0025",
+            "USE_VALUE_EMBEDS": "0",
+            "ATTN_RESIDUAL_MODE": "block",
+            "ATTN_RESIDUAL_BACKEND": "package",
+            "ATTN_RESIDUAL_BLOCK_SIZE": "4"
+          }
+        }
+      ]
+    }
+  ]
+}

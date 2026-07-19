@@ -1,0 +1,30 @@
+{
+  "rounds": [
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "checkpoint_smoke",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "OPENCLAW_CHECKPOINT_IF_BEST": "1",
+            "OPENCLAW_BEST_VAL_BPB": "inf",
+            "OPENCLAW_CHECKPOINT_DIR": "checkpoints/checkpoint-smoke",
+            "OPENCLAW_SAMPLE_TOKENS": "8"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "checkpoint_smoke",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "OPENCLAW_CHECKPOINT_IF_BEST": "1",
+            "OPENCLAW_BEST_VAL_BPB": "inf",
+            "OPENCLAW_CHECKPOINT_DIR": "checkpoints/checkpoint-smoke",
+            "OPENCLAW_SAMPLE_TOKENS": "8"
+          }
+        }
+      ]
+    }
+  ]
+}
