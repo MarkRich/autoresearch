@@ -18,6 +18,8 @@ import urllib.request
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
+from autoresearch_utils import attention_window_covers_sequence
+
 import torch
 if os.environ.get("OPENCLAW_DISABLE_TORCH_COMPILE") == "1":
     def _torch_compile(fn=None, **_kwargs):
@@ -245,7 +247,7 @@ class CausalSelfAttention(nn.Module):
         else:
             # PyTorch SDPA can select flash attention on Ampere, but it cannot
             # honor the FA3-only sliding-window hint. Refuse that fake comparison.
-            if window_size[0] != T:
+            if not attention_window_covers_sequence(window_size, T):
                 raise RuntimeError(
                     "Sliding-window attention requires FA3; use "
                     "WINDOW_PATTERN=LLLL with the PyTorch SDPA fallback."
