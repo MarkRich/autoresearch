@@ -55,6 +55,12 @@ useful check that the harness and validation path are repeatable.
 | same | 600 s | FP16 autocast | 2.434835, 2.443807 | Mean 2.439321; reject |
 | `codex-6h-value-bf16-10m-20260718-065236` | 600 s | no value residuals | 1.989508, 2.003576 | Mean 1.996542; promote |
 | same | 600 s | ResFormer value residuals | 2.007387, 1.994961 | Mean 2.001174; reject |
+| `codex-6h-gated-smoke-20260718-071606` | 60 s | headwise gated attention | 3.065947 | Healthy; requires crossover |
+| same | 60 s | standard attention | 3.060079 | Control |
+| `codex-6h-gated-10m-20260718-071846` | 600 s | headwise gated attention | 2.010097, 1.996362 | Mean 2.003229; reject |
+| same | 600 s | standard attention | 1.989243, 2.001488 | Mean 1.995366; retain |
+| `codex-6h-attnres-smoke-20260719-073237` | 60 s | blockwise Attention Residuals | 3.158942 | Reject; 8 steps, 3.03 GB |
+| same | 60 s | standard residuals | 3.057921 | Retain; 16 steps, 6.03 GB |
 
 The budget-accounting fix produced 13 counted optimizer steps and roughly
 60-62 seconds of measured training per lane. Before the fix, eager experiments
@@ -88,6 +94,20 @@ saved about 193 MB of peak allocated VRAM and improved throughput by roughly
 per optimizer step, but the leaner model completed more useful steps inside the
 fixed wall-clock budget and won the deciding metric. Value residuals are now
 disabled in the default recipe.
+
+Headwise gated attention follows the query-dependent post-SDPA gate from
+[Gated Attention for Large Language Models](https://arxiv.org/abs/2505.06708).
+It was healthy and nearly parameter-neutral, but its replicated mean was
+0.007863 worse than standard attention and it used about 137 MB more peak
+VRAM. The implementation remains available behind `ATTN_OUTPUT_GATE`, but is
+not part of the incumbent.
+
+Blockwise [Attention Residuals](https://arxiv.org/abs/2603.15031) ran correctly
+through the `flash-attn-res` custom backward and cut peak memory roughly in
+half. On these RTX 3090 lanes it stabilized near 100k tokens/s versus 130k for
+standard residuals, completed only 8 versus 16 counted smoke steps, and scored
+0.101020 worse. That efficiency gap makes a long crossover ineligible under
+the fixed wall-clock objective.
 
 ## Promotion policy
 
