@@ -23,7 +23,9 @@
             "EMBEDDING_LR": "0.0025",
             "UNEMBEDDING_LR": "0.0005",
             "MATRIX_LR": "0.0005",
-            "SCALAR_LR": "0.0025"
+            "SCALAR_LR": "0.0025",
+            "OPENCLAW_DISABLE_TORCH_COMPILE": "1",
+            "UNCOUNTED_WARMUP_STEPS": "0"
           }
         }
       ]
@@ -38,7 +40,9 @@
             "EMBEDDING_LR": "0.0025",
             "UNEMBEDDING_LR": "0.0005",
             "MATRIX_LR": "0.0005",
-            "SCALAR_LR": "0.0025"
+            "SCALAR_LR": "0.0025",
+            "OPENCLAW_DISABLE_TORCH_COMPILE": "1",
+            "UNCOUNTED_WARMUP_STEPS": "0"
           }
         },
         {
