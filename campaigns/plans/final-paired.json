@@ -1,0 +1,38 @@
+{
+  "rounds": [
+    {
+      "lanes": [
+        {
+          "gpu": 0,
+          "label": "final_bf16_lr_five_sixteenths",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.003125",
+            "UNEMBEDDING_LR": "0.000625",
+            "MATRIX_LR": "0.000625",
+            "SCALAR_LR": "0.003125",
+            "OPENCLAW_CHECKPOINT_IF_BEST": "1",
+            "OPENCLAW_BEST_VAL_BPB": "inf",
+            "OPENCLAW_CHECKPOINT_DIR": "checkpoints/codex-6h-final",
+            "OPENCLAW_SAMPLE_TOKENS": "160"
+          }
+        },
+        {
+          "gpu": 1,
+          "label": "final_bf16_lr_five_sixteenths",
+          "env": {
+            "DEVICE_BATCH_SIZE": "8",
+            "EMBEDDING_LR": "0.003125",
+            "UNEMBEDDING_LR": "0.000625",
+            "MATRIX_LR": "0.000625",
+            "SCALAR_LR": "0.003125",
+            "OPENCLAW_CHECKPOINT_IF_BEST": "1",
+            "OPENCLAW_BEST_VAL_BPB": "inf",
+            "OPENCLAW_CHECKPOINT_DIR": "checkpoints/codex-6h-final",
+            "OPENCLAW_SAMPLE_TOKENS": "160"
+          }
+        }
+      ]
+    }
+  ]
+}

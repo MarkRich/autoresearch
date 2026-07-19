@@ -56,6 +56,11 @@ final hour, refine upward once at 1.25 times quarter-scale rates: this remains
 well below the rejected 2-times recipe while testing whether the stable long
 run left optimization speed on the table.
 
+That refinement won its swapped 30-minute crossover by 0.049529 validation BPB
+(3.2 percent relative) and reduced replicate spread. The final paired hour uses
+the 1.25-times recipe on both independent GPU lanes and saves both checkpoints
+plus deterministic samples after final validation.
+
 Compiled execution is the current host-level incumbent after a replicated
 10-minute crossover. Long runs use 11 explicit zero-learning-rate compiler
 warm-up steps and exclude only those steps from the measured training budget.

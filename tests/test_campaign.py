@@ -61,6 +61,7 @@ class CampaignTests(unittest.TestCase):
         self.assertIn("attnres-crossover.json", loaded)
         self.assertIn("bf16-fine-lr-crossover.json", loaded)
         self.assertIn("checkpoint-smoke.json", loaded)
+        self.assertIn("final-paired.json", loaded)
         self.assertTrue(all(rounds for rounds in loaded.values()))
 
     def test_reads_the_last_final_metric(self):

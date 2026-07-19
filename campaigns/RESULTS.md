@@ -21,6 +21,8 @@ code path is safe enough to measure.
 | same | 600 s | quarter learning rates | 2.434815, 2.443969 | 2.439392 | Retain stable incumbent |
 | `codex-6h-bf16-lr-30m-20260719-080020` | 1,800 s | quarter learning rates | 1.560549, 1.537927 | 1.549238 | Promote for fine search |
 | same | 1,800 s | eighth learning rates | 1.733231, 1.764117 | 1.748674 | Reject; under-trains at long budget |
+| `codex-6h-bf16-fine-lr-30m-20260719-091240` | 1,800 s | 1.25 x quarter rates | 1.491551, 1.506759 | 1.499155 | Promote to final hour |
+| same | 1,800 s | quarter learning rates | 1.559841, 1.537528 | 1.548684 | Stable control |
 
 Batch 8 used about 7.6 GB per lane, while batch 16 used about 14.5 GB. The
 crossover is necessary because GPU 0 enters firmware thermal slowdown and is
@@ -49,6 +51,11 @@ recipe was stable but plainly under-trained at the fixed wall-clock budget.
 Because quarter-scale retained a wide stable margin, the next refinement tests
 1.25 times its rates rather than spending another long run below it.
 
+The upward refinement improved the paired mean by another 0.049529 BPB (3.2
+percent relative). It won both GPU/seed placements, reduced the replicate
+spread from 0.022313 to 0.015209, and completed both cooldowns with zero fixed-
+probe regression events. The 1.25-times recipe is the final one-hour choice.
+
 ## Correctness and paper-inspired smoke tests
 
 | Campaign | Budget / lane | Treatment | Score | Outcome |
@@ -73,6 +80,8 @@ Because quarter-scale retained a wide stable margin, the next refinement tests
 | same | 60 s | standard residuals | 3.057921 | Retain; 16 steps, 6.03 GB |
 | `codex-6h-compile-10m-20260719-073510` | 600 s | compiled batch 8 | 1.901548, 1.888342 | Mean 1.894945; promote |
 | same | 600 s | eager batch 8 | 1.988884, 2.003031 | Mean 1.995957; reject |
+| `codex-6h-checkpoint-smoke-20260719-090511` | 60 s | checkpoint + short sample | 2.970389, 2.957604 | Exposed short-context SDPA generation bug |
+| `codex-6h-checkpoint-smoke2-20260719-090936` | 60 s | fixed checkpoint + sample | 2.968605, 2.957730 | Pass; two reloadable checkpoints and samples |
 
 The budget-accounting fix produced 13 counted optimizer steps and roughly
 60-62 seconds of measured training per lane. Before the fix, eager experiments
@@ -127,6 +136,14 @@ peak allocated VRAM from 6.03 GB to 3.18 GB in both placements. The 11
 compiler warm-up steps are declared explicitly, run at zero learning rate, and
 are excluded from the 600-second training clock. Compilation is now the
 default for long confirmation runs on this host.
+
+The first artifact smoke wrote both checkpoints but failed while sampling: a
+full 2,048-token attention window was incorrectly rejected when the generated
+context was shorter than 2,048 tokens. The guard now tests whether the window
+covers the current sequence rather than requiring equal lengths. CPU-only
+regression tests cover both short generation and a genuinely undersized
+window; the repeated GPU smoke produced two reloadable 126 MB checkpoints and
+two non-empty deterministic samples.
 
 ## Promotion policy
 
